@@ -10,15 +10,18 @@ type Props = {
   onRemove: (id: string) => void;
   onClear: () => void;
   onMarkAllWatched: () => void;
+  onPlay: () => void;
+  hidden?: boolean;
 };
 
 // watch_videos silently ignores anything past 50 IDs.
 const MAX_PLAY = 50;
 
-export default function QueueBar({ queue, onMove, onRemove, onClear, onMarkAllWatched }: Props) {
+export default function QueueBar({ queue, onMove, onRemove, onClear, onMarkAllWatched, onPlay, hidden }: Props) {
   const [open, setOpen] = useState(false);
   const [played, setPlayed] = useState(false);
-  if (queue.length === 0) return null;
+  // Hidden (not unmounted) while the player is open, so `played` survives.
+  if (hidden || queue.length === 0) return null;
 
   const total = queue.reduce((sum, v) => sum + (v.duration ?? 0), 0);
   const playUrl = `https://www.youtube.com/watch_videos?video_ids=${queue
@@ -48,9 +51,15 @@ export default function QueueBar({ queue, onMove, onRemove, onClear, onMarkAllWa
             {open ? "Hide" : "Edit"}
           </button>
         )}
-        <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer" onClick={() => setPlayed(true)}>
-          Play all
-        </a>
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            setPlayed(true);
+            onPlay();
+          }}
+        >
+          Play here
+        </button>
       </div>
       {open && (
         <div className="queue-items">
@@ -86,8 +95,13 @@ export default function QueueBar({ queue, onMove, onRemove, onClear, onMarkAllWa
             ))}
           </div>
           <div className="form-row" style={{ justifyContent: "space-between", padding: "8px 0" }}>
-            <span className="muted small">
-              {queue.length > MAX_PLAY && `YouTube plays the first ${MAX_PLAY} only.`}
+            <span className="form-row">
+              <a className="btn ghost sm" href={playUrl} target="_blank" rel="noreferrer" onClick={() => setPlayed(true)}>
+                Open in YouTube
+              </a>
+              <span className="muted small">
+                {queue.length > MAX_PLAY && `YouTube plays the first ${MAX_PLAY} only.`}
+              </span>
             </span>
             <button className="btn ghost sm danger" onClick={onClear}>
               Clear queue

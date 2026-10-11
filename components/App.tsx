@@ -5,6 +5,7 @@ import { matchesRules } from "@/lib/format";
 import type { AppState, Group, Video } from "@/lib/types";
 import ChannelsView from "./ChannelsView";
 import LaterView from "./LaterView";
+import Player, { PLAYER_DEFAULT_WIDTH, clampPlayerWidth } from "./Player";
 import QueueBar from "./QueueBar";
 import VideoCard from "./VideoCard";
 
@@ -58,6 +59,8 @@ export default function App() {
   const [hideShorts, setHideShorts] = useState(true);
   const [thumbSize, setThumbSize] = useState<ThumbSize>("m");
   const [queue, setQueue] = useState<Video[]>([]);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [playerWidth, setPlayerWidth] = useState(PLAYER_DEFAULT_WIDTH);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
@@ -94,6 +97,7 @@ export default function App() {
     setHideShorts(load("mt:hideShorts", true));
     setThumbSize(load("mt:thumbSize", "m"));
     setGroupId(load("mt:group", "all"));
+    setPlayerWidth(clampPlayerWidth(load("mt:playerWidth", PLAYER_DEFAULT_WIDTH)));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -109,7 +113,8 @@ export default function App() {
     save("mt:hideShorts", hideShorts);
     save("mt:thumbSize", thumbSize);
     save("mt:group", groupId);
-  }, [queue, hideWatched, hideShorts, thumbSize, groupId]);
+    save("mt:playerWidth", playerWidth);
+  }, [queue, hideWatched, hideShorts, thumbSize, groupId, playerWidth]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const laterIds = useMemo(() => new Set(state?.later.map((v) => v.id) ?? []), [state?.later]);
@@ -226,7 +231,10 @@ export default function App() {
     : null;
 
   return (
-    <>
+    <div
+      className={playingId ? "with-player" : undefined}
+      style={{ "--player-w": `${playerWidth}px` } as React.CSSProperties}
+    >
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
@@ -375,8 +383,24 @@ export default function App() {
         )}
       </main>
 
+      {playingId && (
+        <Player
+          queue={queue}
+          currentId={playingId}
+          watched={watched}
+          width={playerWidth}
+          onResize={setPlayerWidth}
+          onSelect={setPlayingId}
+          onRemove={(id) => setQueue((q) => q.filter((v) => v.id !== id))}
+          onFinished={(id) => setWatched([id], true)}
+          onClose={() => setPlayingId(null)}
+        />
+      )}
+
       <QueueBar
         queue={queue}
+        hidden={!!playingId}
+        onPlay={() => queue[0] && setPlayingId(queue[0].id)}
         onMove={moveInQueue}
         onRemove={(id) => setQueue((q) => q.filter((v) => v.id !== id))}
         onClear={() => setQueue([])}
@@ -388,6 +412,6 @@ export default function App() {
           setQueue([]);
         }}
       />
-    </>
+    </div>
   );
 }
