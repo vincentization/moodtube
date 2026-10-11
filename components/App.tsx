@@ -1,70 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, load, save } from "@/lib/client";
 import { matchesRules } from "@/lib/format";
 import type { AppState, Group, Video } from "@/lib/types";
-import ChannelsView from "./ChannelsView";
-import LaterView from "./LaterView";
-import Player, { PLAYER_DEFAULT_WIDTH, clampPlayerWidth } from "./Player";
-import QueueBar from "./QueueBar";
-import VideoCard from "./VideoCard";
-
-type Tab = "feed" | "later" | "channels";
-type ThumbSize = "s" | "m" | "l";
-
-const THUMB_SIZES: { id: ThumbSize; label: string; title: string }[] = [
-  { id: "s", label: "S", title: "Small thumbnails" },
-  { id: "m", label: "M", title: "Medium thumbnails" },
-  { id: "l", label: "L", title: "Large thumbnails" },
-];
+import Cartridge from "./Cartridge";
+import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
+import Deck from "./Deck";
+import Header from "./Header";
+import Stack from "./Stack";
 
 const STALE_MS = 30 * 60 * 1000; // auto-refresh on load if the cache is older than this
 const PAGE = 60;
 
-// localStorage can throw (private mode, blocked storage), and the app must work without it.
-function load<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-function save(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
-
-async function api<T = unknown>(path: string, method = "POST", body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { "content-type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (res.status === 401) {
-    window.location.href = "/login";
-    throw new Error("Unauthorized");
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
-  return data as T;
-}
-
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
-  const [tab, setTab] = useState<Tab>("feed");
   const [groupId, setGroupId] = useState("all");
   const [hideWatched, setHideWatched] = useState(true);
   const [hideShorts, setHideShorts] = useState(true);
-  const [thumbSize, setThumbSize] = useState<ThumbSize>("m");
+  const [size, setSize] = useState<ThumbSize>("m");
   const [queue, setQueue] = useState<Video[]>([]);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [playerWidth, setPlayerWidth] = useState(PLAYER_DEFAULT_WIDTH);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
   const restored = useRef(false);
+  const sentinel = useRef<HTMLDivElement>(null);
 
   const loadState = useCallback(async () => {
     const s = await api<AppState>("/api/state", "GET");
@@ -74,15 +36,10 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    setStatus("Fetching feeds…");
     try {
       const r = await api<{ channels: number; failed: string[] }>("/api/refresh");
       await loadState();
-      setStatus(
-        r.failed.length
-          ? `Updated ${r.channels - r.failed.length} of ${r.channels} channels. Failed: ${r.failed.slice(0, 3).join(", ")}${r.failed.length > 3 ? "…" : ""}`
-          : "",
-      );
+      setStatus(r.failed.length ? `Updated ${r.channels - r.failed.length} of ${r.channels} channels.` : "");
     } catch (err) {
       setStatus(`Refresh failed: ${(err as Error).message}`);
     } finally {
@@ -95,9 +52,8 @@ export default function App() {
     setQueue(load("mt:queue", []));
     setHideWatched(load("mt:hideWatched", true));
     setHideShorts(load("mt:hideShorts", true));
-    setThumbSize(load("mt:thumbSize", "m"));
+    setSize(load<ThumbSize>("mt:thumbSize", "m"));
     setGroupId(load("mt:group", "all"));
-    setPlayerWidth(clampPlayerWidth(load("mt:playerWidth", PLAYER_DEFAULT_WIDTH)));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -111,14 +67,13 @@ export default function App() {
     save("mt:queue", queue);
     save("mt:hideWatched", hideWatched);
     save("mt:hideShorts", hideShorts);
-    save("mt:thumbSize", thumbSize);
+    save("mt:thumbSize", size);
     save("mt:group", groupId);
-    save("mt:playerWidth", playerWidth);
-  }, [queue, hideWatched, hideShorts, thumbSize, groupId, playerWidth]);
+  }, [queue, hideWatched, hideShorts, size, groupId]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const laterIds = useMemo(() => new Set(state?.later.map((v) => v.id) ?? []), [state?.later]);
-  const queuePos = useMemo(() => new Map(queue.map((v, i) => [v.id, i + 1])), [queue]);
+  const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
 
   const activeGroup = state?.groups.find((g) => g.id === groupId) ?? null;
   const feed = useMemo(() => {
@@ -134,6 +89,17 @@ export default function App() {
 
   useEffect(() => setLimit(PAGE), [groupId, hideWatched, hideShorts]);
 
+  // Load more cartridges as the end of the rack scrolls into view.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setLimit((l) => l + PAGE);
+    }, { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [feed.length > limit]);
+
   // Mutations update local state first, then sync. On failure, reload from the server.
   const sync = (p: Promise<unknown>) =>
     p.catch((err) => {
@@ -141,19 +107,32 @@ export default function App() {
       loadState().catch(() => {});
     });
 
-  function toggleQueue(v: Video) {
-    setQueue((q) => (q.some((x) => x.id === v.id) ? q.filter((x) => x.id !== v.id) : [...q, v]));
-  }
-
   function setWatched(ids: string[], on: boolean) {
-    setState((s) =>
-      s && {
-        ...s,
-        watched: on ? [...new Set([...s.watched, ...ids])] : s.watched.filter((id) => !ids.includes(id)),
-        later: on ? s.later.filter((v) => !ids.includes(v.id)) : s.later,
-      },
+    setState(
+      (s) =>
+        s && {
+          ...s,
+          watched: on ? [...new Set([...s.watched, ...ids])] : s.watched.filter((id) => !ids.includes(id)),
+          later: on ? s.later.filter((v) => !ids.includes(v.id)) : s.later,
+        },
     );
     sync(api("/api/watched", "POST", { ids, watched: on }));
+  }
+
+  // Removing items from Watch now; if the playing one goes, play moves to the next survivor.
+  function removeFromQueue(ids: string[]) {
+    const gone = new Set(ids);
+    if (currentId && gone.has(currentId)) {
+      const from = queue.findIndex((v) => v.id === currentId);
+      setCurrentId(queue.slice(from + 1).find((v) => !gone.has(v.id))?.id ?? null);
+      if (!queue.slice(from + 1).some((v) => !gone.has(v.id))) setPlaying(false);
+    }
+    setQueue((q) => q.filter((v) => !gone.has(v.id)));
+  }
+
+  function toggleQueue(v: Video) {
+    if (queueIds.has(v.id)) removeFromQueue([v.id]);
+    else setQueue((q) => [...q, v]);
   }
 
   function toggleLater(v: Video) {
@@ -167,18 +146,20 @@ export default function App() {
     sync(api("/api/later", "POST", { action: "remove", ids }));
   }
 
-  function moveLaterToQueue(items: Video[]) {
-    setQueue((q) => [...q, ...items.filter((v) => !q.some((x) => x.id === v.id))]);
-    removeLater(items.map((v) => v.id));
+  function laterToNow(id: string) {
+    const v = state?.later.find((x) => x.id === id);
+    if (!v) return;
+    setQueue((q) => (q.some((x) => x.id === id) ? q : [...q, v]));
+    removeLater([id]);
   }
 
-  function moveInQueue(index: number, delta: number) {
-    setQueue((q) => {
-      const next = [...q];
-      const [item] = next.splice(index, 1);
-      next.splice(index + delta, 0, item);
-      return next;
-    });
+  function reorder(list: "queue" | "later", ids: string[]) {
+    if (list === "queue") {
+      setQueue((q) => ids.map((id) => q.find((v) => v.id === id)!).filter(Boolean));
+      return;
+    }
+    setState((s) => s && { ...s, later: ids.map((id) => s.later.find((v) => v.id === id)!).filter(Boolean) });
+    sync(api("/api/later", "POST", { action: "reorder", ids }));
   }
 
   function saveGroups(groups: Group[]) {
@@ -186,11 +167,11 @@ export default function App() {
     sync(api("/api/groups", "PUT", { groups }));
   }
 
-  function setChannelInGroup(channelId: string, groupId: string, on: boolean) {
+  function setChannelInGroup(channelId: string, gid: string, on: boolean) {
     if (!state) return;
     saveGroups(
       state.groups.map((g) =>
-        g.id !== groupId
+        g.id !== gid
           ? g
           : { ...g, channelIds: on ? [...new Set([...g.channelIds, channelId])] : g.channelIds.filter((c) => c !== channelId) },
       ),
@@ -202,216 +183,85 @@ export default function App() {
     saveGroups([...state.groups, { id: crypto.randomUUID(), name, channelIds: [channelId], rules: {} }]);
   }
 
-  async function importCsv(csv: string): Promise<string> {
-    try {
-      const r = await api<{ found: number; added: number }>("/api/import", "POST", { csv });
-      await loadState();
-      if (r.added > 0) refresh();
-      return `Found ${r.found} channels, ${r.added} new.`;
-    } catch (err) {
-      return (err as Error).message;
-    }
-  }
-
-  function removeChannel(id: string) {
-    setState(
-      (s) =>
-        s && {
-          ...s,
-          channels: s.channels.filter((c) => c.id !== id),
-          videos: s.videos.filter((v) => v.channelId !== id),
-          groups: s.groups.map((g) => ({ ...g, channelIds: g.channelIds.filter((c) => c !== id) })),
-        },
-    );
-    sync(api(`/api/channels?id=${encodeURIComponent(id)}`, "DELETE"));
-  }
-
-  const lastRefresh = state?.lastRefresh
-    ? new Date(state.lastRefresh).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
+  const later = state?.later ?? [];
+  const cols = SIZE_COLUMNS[size];
 
   return (
-    <div
-      className={playingId ? "with-player" : undefined}
-      style={{ "--player-w": `${playerWidth}px` } as React.CSSProperties}
-    >
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand">
-            <span className="brand-dot" />
-            Moodtube
+    <div className="page">
+      <div className="console">
+        <Header page="feed" refreshing={refreshing} onRefresh={refresh} />
+        <div className="body">
+          <ChannelSelect
+            groups={state?.groups ?? []}
+            groupId={activeGroup ? groupId : "all"}
+            onGroup={setGroupId}
+            hideWatched={hideWatched}
+            onHideWatched={setHideWatched}
+            hideShorts={hideShorts}
+            onHideShorts={setHideShorts}
+            size={size}
+            onSize={setSize}
+          />
+
+          <div className="feed">
+            {status && <div className="empty">{status}</div>}
+            {!state ? (
+              !status && <div className="empty">Loading…</div>
+            ) : state.channels.length === 0 ? (
+              <div className="empty">No channels yet — import your subscriptions on the Channels page.</div>
+            ) : feed.length === 0 ? (
+              <div className="empty">
+                {state.videos.length === 0 ? "No videos yet — press Refresh." : "Nothing here matches this channel's filters."}
+              </div>
+            ) : (
+              <div className="rack" style={{ "--cols": cols } as React.CSSProperties}>
+                {feed.slice(0, limit).map((v, i) => (
+                  <Cartridge
+                    key={v.id}
+                    video={v}
+                    num={i + 1}
+                    inQueue={queueIds.has(v.id)}
+                    inLater={laterIds.has(v.id)}
+                    watched={watched.has(v.id)}
+                    groups={state.groups}
+                    onQueue={() => toggleQueue(v)}
+                    onLater={() => toggleLater(v)}
+                    onToggleGroup={(gid, on) => setChannelInGroup(v.channelId, gid, on)}
+                    onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
+                  />
+                ))}
+              </div>
+            )}
+            {feed.length > limit && <div ref={sentinel} style={{ height: 1 }} />}
           </div>
-          <nav className="tabs">
-            <button className={`tab${tab === "feed" ? " active" : ""}`} onClick={() => setTab("feed")}>
-              Feed
-            </button>
-            <button className={`tab${tab === "later" ? " active" : ""}`} onClick={() => setTab("later")}>
-              Later
-              {state && state.later.length > 0 && <span className="count">{state.later.length}</span>}
-            </button>
-            <button className={`tab${tab === "channels" ? " active" : ""}`} onClick={() => setTab("channels")}>
-              Channels
-            </button>
-          </nav>
-          <div className="topbar-actions">
-            <button className="btn sm" onClick={refresh} disabled={refreshing || !state?.channels.length}>
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
-            <form action="/api/logout" method="post">
-              <button className="btn ghost sm" type="submit">
-                Log out
-              </button>
-            </form>
+
+          <div className="side">
+            <Deck
+              queue={queue}
+              currentId={currentId}
+              playing={playing}
+              watched={watched}
+              onSelect={setCurrentId}
+              onPlaying={setPlaying}
+              onFinished={(id) => setWatched([id], true)}
+            />
+            <Stack
+              queue={queue}
+              later={later}
+              currentId={currentId}
+              watched={watched}
+              onPlay={(id) => {
+                setCurrentId(id);
+                setPlaying(true);
+              }}
+              onReorder={reorder}
+              onEject={(list, id) => (list === "queue" ? removeFromQueue([id]) : removeLater([id]))}
+              onLaterToNow={laterToNow}
+              onClearWatched={() => removeFromQueue(queue.filter((v) => watched.has(v.id)).map((v) => v.id))}
+            />
           </div>
         </div>
-      </header>
-
-      <main className="shell">
-        {!state ? (
-          <div className="empty">{status || "Loading…"}</div>
-        ) : tab === "feed" ? (
-          state.channels.length === 0 ? (
-            <div className="empty">
-              <h2>No channels yet</h2>
-              <p>Import your subscriptions.csv from Google Takeout to get started.</p>
-              <button className="btn primary" onClick={() => setTab("channels")}>
-                Import subscriptions
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="toolbar">
-                <div className="chips">
-                  <button className={`chip${!activeGroup ? " active" : ""}`} onClick={() => setGroupId("all")}>
-                    All
-                  </button>
-                  {state.groups.map((g) => (
-                    <button
-                      key={g.id}
-                      className={`chip${activeGroup?.id === g.id ? " active" : ""}`}
-                      onClick={() => setGroupId(g.id)}
-                    >
-                      {g.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="toggles">
-                  <div className="segmented" role="radiogroup" aria-label="Thumbnail size">
-                    {THUMB_SIZES.map((t) => (
-                      <button
-                        key={t.id}
-                        role="radio"
-                        aria-checked={thumbSize === t.id}
-                        title={t.title}
-                        className={thumbSize === t.id ? "active" : ""}
-                        onClick={() => setThumbSize(t.id)}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="toggle">
-                    <input type="checkbox" checked={hideShorts} onChange={(e) => setHideShorts(e.target.checked)} />
-                    Hide Shorts
-                  </label>
-                  <label className="toggle">
-                    <input type="checkbox" checked={hideWatched} onChange={(e) => setHideWatched(e.target.checked)} />
-                    Hide watched
-                  </label>
-                </div>
-              </div>
-              <p className="status" style={{ margin: "0 0 16px" }}>
-                {status || (
-                  <>
-                    {feed.length} videos{lastRefresh && ` · updated ${lastRefresh}`}
-                    {" · "}tap a thumbnail to queue it
-                  </>
-                )}
-              </p>
-              {feed.length === 0 ? (
-                <div className="empty">
-                  <h2>All caught up</h2>
-                  <p>
-                    {state.videos.length === 0
-                      ? "Hit Refresh to fetch the latest videos."
-                      : "Nothing here matches this group and its rules."}
-                  </p>
-                </div>
-              ) : (
-                <div className={`grid size-${thumbSize}`}>
-                  {feed.slice(0, limit).map((v) => (
-                    <VideoCard
-                      key={v.id}
-                      video={v}
-                      queuePos={queuePos.get(v.id) ?? 0}
-                      watched={watched.has(v.id)}
-                      later={laterIds.has(v.id)}
-                      groups={state.groups}
-                      onToggleQueue={() => toggleQueue(v)}
-                      onToggleLater={() => toggleLater(v)}
-                      onToggleWatched={() => setWatched([v.id], !watched.has(v.id))}
-                      onToggleGroup={(groupId, on) => setChannelInGroup(v.channelId, groupId, on)}
-                      onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
-                    />
-                  ))}
-                </div>
-              )}
-              {feed.length > limit && (
-                <div className="more">
-                  <button className="btn" onClick={() => setLimit(limit + PAGE)}>
-                    Show more ({feed.length - limit})
-                  </button>
-                </div>
-              )}
-            </>
-          )
-        ) : tab === "later" ? (
-          <LaterView
-            later={state.later}
-            onMoveToQueue={moveLaterToQueue}
-            onWatched={(id) => setWatched([id], true)}
-            onRemove={(id) => removeLater([id])}
-          />
-        ) : (
-          <ChannelsView
-            channels={state.channels}
-            groups={state.groups}
-            onImport={importCsv}
-            onGroupsChange={saveGroups}
-            onRemoveChannel={removeChannel}
-          />
-        )}
-      </main>
-
-      {playingId && (
-        <Player
-          queue={queue}
-          currentId={playingId}
-          watched={watched}
-          width={playerWidth}
-          onResize={setPlayerWidth}
-          onSelect={setPlayingId}
-          onRemove={(id) => setQueue((q) => q.filter((v) => v.id !== id))}
-          onFinished={(id) => setWatched([id], true)}
-          onClose={() => setPlayingId(null)}
-        />
-      )}
-
-      <QueueBar
-        queue={queue}
-        hidden={!!playingId}
-        onPlay={() => queue[0] && setPlayingId(queue[0].id)}
-        onMove={moveInQueue}
-        onRemove={(id) => setQueue((q) => q.filter((v) => v.id !== id))}
-        onClear={() => setQueue([])}
-        onMarkAllWatched={() => {
-          setWatched(
-            queue.map((v) => v.id),
-            true,
-          );
-          setQueue([]);
-        }}
-      />
+      </div>
     </div>
   );
 }

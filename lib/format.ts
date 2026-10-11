@@ -17,6 +17,39 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Cartridge/stack readouts: unknown length shows dashes, like the design's empty readout.
+export function durLabel(seconds: number | null): string {
+  if (seconds == null) return "--:--";
+  return seconds === 0 ? "LIVE" : formatDuration(seconds)!;
+}
+
+// Stack totals read "X H Y MIN" (the design uppercases "X h Y min").
+export function totalLabel(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h ? `${h} H ${m} MIN` : `${m} MIN`;
+}
+
+// Compact age for the cartridge meta line, e.g. "2H" in "NO. 01 · 2H AGO".
+export function ageShort(iso: string): string {
+  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return `${mins}M`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}H`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}D`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 9) return `${weeks}W`;
+  const months = Math.round(days / 30);
+  return months < 12 ? `${months}MO` : `${Math.round(days / 365)}Y`;
+}
+
+const NEW_MS = 24 * 60 * 60 * 1000;
+
+export function isRecent(iso: string): boolean {
+  return Date.now() - new Date(iso).getTime() < NEW_MS;
+}
+
 export function thumbUrl(id: string): string {
   return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 }

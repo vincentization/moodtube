@@ -134,3 +134,11 @@ export async function addLater(videos: Video[]) {
 export async function removeLater(ids: string[]) {
   if (ids.length) await db().hdel(K.later, ...ids);
 }
+
+// Watch later is ordered by addedAt, so a reorder rewrites those timestamps in the new order.
+export async function reorderLater(ids: string[]) {
+  const items = (await db().hgetall<Record<string, LaterItem>>(K.later)) ?? {};
+  const base = Date.now();
+  const updates = ids.filter((id) => items[id]).map((id, i) => [id, { ...items[id], addedAt: base + i }] as const);
+  if (updates.length) await db().hset(K.later, Object.fromEntries(updates));
+}

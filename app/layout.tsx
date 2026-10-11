@@ -1,24 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import { Archivo_Narrow, VT323 } from "next/font/google";
 import "./globals.css";
+
+const ui = Archivo_Narrow({ weight: ["500", "700"], subsets: ["latin"], variable: "--font-ui" });
+const mono = VT323({ weight: "400", subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Moodtube",
-  description: "A calm, personal YouTube subscription feed.",
+  description: "A personal YouTube subscription feed.",
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f5f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#151716" },
-  ],
+  themeColor: "#d6d4cd",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${ui.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );
