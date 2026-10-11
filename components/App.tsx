@@ -9,6 +9,13 @@ import QueueBar from "./QueueBar";
 import VideoCard from "./VideoCard";
 
 type Tab = "feed" | "later" | "channels";
+type ThumbSize = "s" | "m" | "l";
+
+const THUMB_SIZES: { id: ThumbSize; label: string; title: string }[] = [
+  { id: "s", label: "S", title: "Small thumbnails" },
+  { id: "m", label: "M", title: "Medium thumbnails" },
+  { id: "l", label: "L", title: "Large thumbnails" },
+];
 
 const STALE_MS = 30 * 60 * 1000; // auto-refresh on load if the cache is older than this
 const PAGE = 60;
@@ -49,6 +56,7 @@ export default function App() {
   const [groupId, setGroupId] = useState("all");
   const [hideWatched, setHideWatched] = useState(true);
   const [hideShorts, setHideShorts] = useState(true);
+  const [thumbSize, setThumbSize] = useState<ThumbSize>("m");
   const [queue, setQueue] = useState<Video[]>([]);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,6 +92,7 @@ export default function App() {
     setQueue(load("mt:queue", []));
     setHideWatched(load("mt:hideWatched", true));
     setHideShorts(load("mt:hideShorts", true));
+    setThumbSize(load("mt:thumbSize", "m"));
     setGroupId(load("mt:group", "all"));
     restored.current = true;
     loadState()
@@ -98,8 +107,9 @@ export default function App() {
     save("mt:queue", queue);
     save("mt:hideWatched", hideWatched);
     save("mt:hideShorts", hideShorts);
+    save("mt:thumbSize", thumbSize);
     save("mt:group", groupId);
-  }, [queue, hideWatched, hideShorts, groupId]);
+  }, [queue, hideWatched, hideShorts, thumbSize, groupId]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const laterIds = useMemo(() => new Set(state?.later.map((v) => v.id) ?? []), [state?.later]);
@@ -278,6 +288,20 @@ export default function App() {
                   ))}
                 </div>
                 <div className="toggles">
+                  <div className="segmented" role="radiogroup" aria-label="Thumbnail size">
+                    {THUMB_SIZES.map((t) => (
+                      <button
+                        key={t.id}
+                        role="radio"
+                        aria-checked={thumbSize === t.id}
+                        title={t.title}
+                        className={thumbSize === t.id ? "active" : ""}
+                        onClick={() => setThumbSize(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                   <label className="toggle">
                     <input type="checkbox" checked={hideShorts} onChange={(e) => setHideShorts(e.target.checked)} />
                     Hide Shorts
@@ -306,7 +330,7 @@ export default function App() {
                   </p>
                 </div>
               ) : (
-                <div className="grid">
+                <div className={`grid size-${thumbSize}`}>
                   {feed.slice(0, limit).map((v) => (
                     <VideoCard
                       key={v.id}
