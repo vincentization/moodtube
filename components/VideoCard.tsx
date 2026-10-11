@@ -1,19 +1,34 @@
 "use client";
 
 import { formatDuration, thumbUrl, timeAgo, watchUrl } from "@/lib/format";
-import type { Video } from "@/lib/types";
+import type { Group, Video } from "@/lib/types";
+import GroupMenu from "./GroupMenu";
 
 type Props = {
   video: Video;
   queuePos: number; // 0 = not queued
   watched: boolean;
   later: boolean;
+  groups: Group[];
   onToggleQueue: () => void;
   onToggleLater: () => void;
   onToggleWatched: () => void;
+  onToggleGroup: (groupId: string, on: boolean) => void;
+  onCreateGroup: (name: string) => void;
 };
 
-export default function VideoCard({ video, queuePos, watched, later, onToggleQueue, onToggleLater, onToggleWatched }: Props) {
+export default function VideoCard({
+  video,
+  queuePos,
+  watched,
+  later,
+  groups,
+  onToggleQueue,
+  onToggleLater,
+  onToggleWatched,
+  onToggleGroup,
+  onCreateGroup,
+}: Props) {
   const duration = formatDuration(video.duration);
   return (
     <article className={`card${watched ? " watched" : ""}`}>
@@ -43,6 +58,13 @@ export default function VideoCard({ video, queuePos, watched, later, onToggleQue
           <button className={`btn ghost sm${watched ? " on" : ""}`} onClick={onToggleWatched}>
             {watched ? "Watched" : "Mark watched"}
           </button>
+          <GroupMenu
+            channelId={video.channelId}
+            channelTitle={video.channelTitle}
+            groups={groups}
+            onToggle={onToggleGroup}
+            onCreate={onCreateGroup}
+          />
         </div>
       </div>
     </article>

@@ -195,6 +195,42 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .card-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-left: -8px; }
 .card-actions .btn.on { color: var(--accent); }
 
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 15;
+  width: 230px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.menu-head {
+  padding: 4px 8px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.menu-item:hover { background: var(--surface-2); }
+.menu-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-new { display: flex; gap: 6px; padding: 6px 2px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.menu-new input { padding: 5px 8px; font-size: 14px; }
+
 .more { display: flex; justify-content: center; padding: 32px 0; }
 
 .empty {
@@ -331,4 +367,6 @@ label.channel-item { cursor: pointer; }
   .queue-items .row-actions { width: auto; margin-left: 0; }
   .rules { grid-template-columns: 1fr 1fr; }
   .rules .field:first-child { grid-column: 1 / -1; }
+  .menu { position: fixed; top: auto; left: 12px; right: 12px; bottom: 12px; width: auto; z-index: 30; padding: 8px; }
+  .menu-item { padding: 10px 8px; }
 }

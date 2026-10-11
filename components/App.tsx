@@ -171,6 +171,22 @@ export default function App() {
     sync(api("/api/groups", "PUT", { groups }));
   }
 
+  function setChannelInGroup(channelId: string, groupId: string, on: boolean) {
+    if (!state) return;
+    saveGroups(
+      state.groups.map((g) =>
+        g.id !== groupId
+          ? g
+          : { ...g, channelIds: on ? [...new Set([...g.channelIds, channelId])] : g.channelIds.filter((c) => c !== channelId) },
+      ),
+    );
+  }
+
+  function createGroupWithChannel(name: string, channelId: string) {
+    if (!state) return;
+    saveGroups([...state.groups, { id: crypto.randomUUID(), name, channelIds: [channelId], rules: {} }]);
+  }
+
   async function importCsv(csv: string): Promise<string> {
     try {
       const r = await api<{ found: number; added: number }>("/api/import", "POST", { csv });
@@ -298,9 +314,12 @@ export default function App() {
                       queuePos={queuePos.get(v.id) ?? 0}
                       watched={watched.has(v.id)}
                       later={laterIds.has(v.id)}
+                      groups={state.groups}
                       onToggleQueue={() => toggleQueue(v)}
                       onToggleLater={() => toggleLater(v)}
                       onToggleWatched={() => setWatched([v.id], !watched.has(v.id))}
+                      onToggleGroup={(groupId, on) => setChannelInGroup(v.channelId, groupId, on)}
+                      onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
                     />
                   ))}
                 </div>
