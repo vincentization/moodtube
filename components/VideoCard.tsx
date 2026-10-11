@@ -49,10 +49,10 @@ export default function VideoCard({
           {video.channelTitle} · {timeAgo(video.published)}
         </div>
         <div className="card-actions">
-          <button className={`btn ghost sm${queuePos ? " on" : ""}`} onClick={onToggleQueue}>
+          <button className={`btn ghost sm ${queuePos ? "on" : "hover-only"}`} onClick={onToggleQueue}>
             {queuePos ? "Queued" : "Queue"}
           </button>
-          <button className={`btn ghost sm${later ? " on" : ""}`} onClick={onToggleLater}>
+          <button className={`btn ghost sm ${later ? "on" : "hover-only"}`} onClick={onToggleLater}>
             {later ? "Saved" : "Later"}
           </button>
           <button className={`btn ghost sm${watched ? " on" : ""}`} onClick={onToggleWatched}>

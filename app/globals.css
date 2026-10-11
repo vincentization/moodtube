@@ -216,6 +216,11 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .card-meta { font-size: 13px; color: var(--muted); }
 .card-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-left: -8px; }
 .card-actions .btn.on { color: var(--accent); }
+/* Queue/Later appear on hover; touch screens have no hover, so they stay visible there. */
+@media (hover: hover) {
+  .card-actions .hover-only { opacity: 0; transition: opacity 0.12s; }
+  .card:hover .hover-only, .card:focus-within .hover-only { opacity: 1; }
+}
 
 .menu-wrap { position: relative; }
 .menu {
