@@ -48,6 +48,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("feed");
   const [groupId, setGroupId] = useState("all");
   const [hideWatched, setHideWatched] = useState(true);
+  const [hideShorts, setHideShorts] = useState(true);
   const [queue, setQueue] = useState<Video[]>([]);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
@@ -82,6 +83,7 @@ export default function App() {
   useEffect(() => {
     setQueue(load("mt:queue", []));
     setHideWatched(load("mt:hideWatched", true));
+    setHideShorts(load("mt:hideShorts", true));
     setGroupId(load("mt:group", "all"));
     restored.current = true;
     loadState()
@@ -95,8 +97,9 @@ export default function App() {
     if (!restored.current) return;
     save("mt:queue", queue);
     save("mt:hideWatched", hideWatched);
+    save("mt:hideShorts", hideShorts);
     save("mt:group", groupId);
-  }, [queue, hideWatched, groupId]);
+  }, [queue, hideWatched, hideShorts, groupId]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const laterIds = useMemo(() => new Set(state?.later.map((v) => v.id) ?? []), [state?.later]);
@@ -109,11 +112,12 @@ export default function App() {
     return state.videos.filter(
       (v) =>
         (!members || (members.has(v.channelId) && matchesRules(v, activeGroup!.rules))) &&
-        (!hideWatched || !watched.has(v.id)),
+        (!hideWatched || !watched.has(v.id)) &&
+        (!hideShorts || !v.isShort),
     );
-  }, [state, activeGroup, hideWatched, watched]);
+  }, [state, activeGroup, hideWatched, hideShorts, watched]);
 
-  useEffect(() => setLimit(PAGE), [groupId, hideWatched]);
+  useEffect(() => setLimit(PAGE), [groupId, hideWatched, hideShorts]);
 
   // Mutations update local state first, then sync. On failure, reload from the server.
   const sync = (p: Promise<unknown>) =>
@@ -257,10 +261,16 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <label className="toggle">
-                  <input type="checkbox" checked={hideWatched} onChange={(e) => setHideWatched(e.target.checked)} />
-                  Hide watched
-                </label>
+                <div className="toggles">
+                  <label className="toggle">
+                    <input type="checkbox" checked={hideShorts} onChange={(e) => setHideShorts(e.target.checked)} />
+                    Hide Shorts
+                  </label>
+                  <label className="toggle">
+                    <input type="checkbox" checked={hideWatched} onChange={(e) => setHideWatched(e.target.checked)} />
+                    Hide watched
+                  </label>
+                </div>
               </div>
               <p className="status" style={{ margin: "0 0 16px" }}>
                 {status || (
