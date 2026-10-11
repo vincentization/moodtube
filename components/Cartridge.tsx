@@ -63,12 +63,9 @@ export default function Cartridge(p: Props) {
         </div>
         <div className="well">
           <div className="label">
-            <div className="label-strip">
-              <span className="ch">{p.video.channelTitle.toUpperCase()}</span>
-              <span className="dur mono">{durLabel(p.video.duration)}</span>
-            </div>
             <div className="thumb">
               <img src={thumbUrl(p.video.id)} alt="" loading="lazy" />
+              <span className="dur mono">{durLabel(p.video.duration)}</span>
               {isRecent(p.video.published) && !p.watched && <span className="new">NEW</span>}
               {active && (
                 <div className="hover-keys">
@@ -91,7 +88,7 @@ export default function Cartridge(p: Props) {
                 {p.video.title}
               </span>
               <span className="meta">
-                NO. {String(p.num).padStart(2, "0")} · {ageShort(p.video.published)} AGO
+                {p.video.channelTitle.toUpperCase()} · {ageShort(p.video.published)} AGO
               </span>
             </div>
           </div>
