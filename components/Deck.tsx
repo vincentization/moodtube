@@ -197,8 +197,8 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
     const grip = e.currentTarget;
     grip.setPointerCapture(e.pointerId);
     const body = grip.closest(".body");
-    // Widest CRT that still leaves the tray (200), gaps (2×22), padding (2×28) and a minimum feed.
-    const max = Math.max(MIN_WIDTH, (body?.clientWidth ?? window.innerWidth) - 200 - 44 - 56 - MIN_FEED);
+    // Widest CRT that still leaves the tray (200), gaps (2×22), padding (2×28), the cable gutter (20) and a minimum feed.
+    const max = Math.max(MIN_WIDTH, (body?.clientWidth ?? window.innerWidth) - 200 - 44 - 56 - 20 - MIN_FEED);
     const start = { x: e.clientX, y: e.clientY, width };
     setResizing(true);
     document.documentElement.classList.add("resizing");
@@ -228,6 +228,7 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
       <div className="bezel">
         <span className="screw l" />
         <span className="screw r" />
+        <span className="jack out" />
         <div
           className={`resize-grip${resizing ? " on" : ""}`}
           onPointerDown={startResize}

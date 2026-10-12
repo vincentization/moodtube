@@ -6,13 +6,27 @@ import { useReorder } from "./useReorder";
 
 type Props = {
   queue: Video[];
-  currentId: string | null;
+  currentId: string | null; // null unless the stack is the active source
+  active: boolean;
+  playing: boolean;
   watched: Set<string>;
+  onSource: () => void;
   onPlay: (id: string) => void;
   onReorder: (ids: string[]) => void;
   onEject: (id: string) => void;
   onClearWatched: () => void;
 };
+
+// Patches the CRT into this unit; on the active one it's play/pause.
+export function SourceKey(p: { active: boolean; playing: boolean; onClick: () => void; title: string }) {
+  const pause = p.active && p.playing;
+  return (
+    <button className={`ckey srckey${p.active ? " on" : ""}`} onClick={p.onClick} title={pause ? "Pause" : p.title} aria-pressed={p.active}>
+      <span className="hled" />
+      {pause ? "❚❚" : "▶"}
+    </button>
+  );
+}
 
 const seconds = (vs: Video[]) => vs.reduce((n, v) => n + (v.duration ?? 0), 0);
 
@@ -27,8 +41,10 @@ export default function Stack(p: Props) {
   const total = seconds(p.queue.filter((v) => !p.watched.has(v.id)));
 
   return (
-    <div className="stack">
+    <div className="stack" data-jack="now">
+      <span className="jack" />
       <div className="stack-head">
+        <SourceKey active={p.active} playing={p.playing} onClick={p.onSource} title="Play Watch now" />
         <span className="stack-title">WATCH NOW · {p.queue.length}</span>
         <span className="stack-total mono">{totalLabel(total)}</span>
         {watchedCount > 0 && (

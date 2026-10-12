@@ -4,18 +4,25 @@ import { durLabel, totalLabel } from "@/lib/format";
 import type { GroupBadge } from "@/lib/groups";
 import type { Video } from "@/lib/types";
 import Badge from "./Badge";
+import { SourceKey } from "./Stack";
 import { useReorder } from "./useReorder";
 
 type Props = {
+  id: string;
   name: string;
   badge?: GroupBadge; // absent for the ALL shelf
   later: Video[];
+  currentId: string | null; // null unless this shelf is the active source
+  active: boolean;
+  playing: boolean;
+  onSource: () => void;
+  onPlay: (id: string) => void;
   onReorder: (ids: string[]) => void;
   onRemove: (id: string) => void;
   onToNow: (id: string) => void;
 };
 
-// Watch later for the current group: tapes lying on a wooden shelf, off the deck until moved to Watch now.
+// Watch later for a group: tapes lying on a wooden shelf. Patch the CRT into it to play straight off the shelf.
 export default function Shelf(p: Props) {
   const { rowProps, isDragging, isOver } = useReorder(
     p.later.map((v) => v.id),
@@ -24,8 +31,10 @@ export default function Shelf(p: Props) {
   const total = p.later.reduce((n, v) => n + (v.duration ?? 0), 0);
 
   return (
-    <div className="shelf" style={p.badge ? ({ "--badge": p.badge.color } as React.CSSProperties) : undefined}>
+    <div className="shelf" data-jack={p.id} style={p.badge ? ({ "--badge": p.badge.color } as React.CSSProperties) : undefined}>
+      <span className="jack" />
       <div className="shelf-head">
+        <SourceKey active={p.active} playing={p.playing} onClick={p.onSource} title={`Play the ${p.name} shelf`} />
         {p.badge && <Badge group={p.badge} className="lg" />}
         <span className="shelf-plate" title={`Watch later for ${p.name}`}>
           {p.name.toUpperCase()} · LATER · {p.later.length}
@@ -37,14 +46,14 @@ export default function Shelf(p: Props) {
           <div key={v.id} className={`board${isDragging(v.id) ? " dragging" : ""}`} {...rowProps(v.id)}>
             <div className={`drop-bar${isOver(v.id) ? " on" : ""}`} />
             <div className="spine">
-              <span className="spine-label">
+              <button className={`spine-label${v.id === p.currentId ? " playing" : ""}`} onClick={() => p.onPlay(v.id)} title={`Play ${v.title}`}>
                 <span className="spine-title" title={v.title}>
                   {v.title}
                 </span>
                 <span className="spine-meta mono">
                   {v.channelTitle} · {durLabel(v.duration)}
                 </span>
-              </span>
+              </button>
               <button className="okey" onClick={() => p.onToNow(v.id)} title="Move to Watch now">
                 NOW
               </button>

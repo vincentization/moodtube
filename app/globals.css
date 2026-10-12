@@ -72,7 +72,7 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 /* ---------- Body grid ---------- */
 .body {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) max(var(--crt, 400px), 400px);
+  grid-template-columns: 200px minmax(0, 1fr) calc(max(var(--crt, 400px), 400px) + 20px); /* + the cable gutter */
   gap: 22px;
   padding: 0 28px;
   align-items: stretch;
@@ -410,7 +410,7 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 }
 
 /* ---------- 3. Player + stack ---------- */
-.side { display: flex; flex-direction: column; align-items: flex-end; gap: 16px; }
+.side { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 16px; padding-left: 20px; }
 /* Only the CRT is resizable; it and the stack hug the right edge of the column. */
 .side > .bezel { width: var(--crt, 400px); max-width: 100%; }
 .side > .cable, .side > .stack, .side > .shelf { width: 400px; max-width: 100%; }
@@ -500,14 +500,30 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 .tbtn .glyph { font-size: 15px; }
 .tbtn .word { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
 
-/* Cable from the CRT to the stack; overlaps the side gap so both plugs touch their housings. */
-.cable { position: relative; z-index: 1; height: 56px; margin: -16px 0; pointer-events: none; }
-.cable svg { position: absolute; right: 24px; top: 0; overflow: visible; }
+/* Gap under the CRT for the cable to the stack; the cord itself is drawn over the column (.patch)
+   and drops down the left gutter when it's plugged into a shelf further down. */
+.cable { height: 56px; margin: -16px 0; pointer-events: none; }
+.patch { position: absolute; left: 0; top: 0; z-index: 3; overflow: visible; pointer-events: none; }
 .cable-cord { fill: none; stroke: #1a1a17; stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.3)); }
 .cable-shine { fill: none; stroke: rgba(255, 255, 255, 0.14); stroke-width: 1.5; stroke-linecap: round; transform: translate(-1.5px, -1px); }
 .cable-boot { fill: #2a2924; stroke: #111; stroke-width: 1; }
+.cable-cord, .cable-shine { stroke-dasharray: 1; animation: cord-in 0.45s ease-out both; }
+.cable-plug { animation: plug-in 0.2s 0.35s ease-out both; }
+@keyframes cord-in { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes plug-in { from { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .cable-cord, .cable-shine, .cable-plug { animation: none; } }
+/* Jacks: the CRT's output on its bottom edge, an input on top of each unit the cable can plug into. */
+.jack { position: absolute; width: 22px; height: 6px; border-radius: 2px; background: #0d0d0b; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255, 255, 255, 0.15); }
+.jack.out { bottom: -3px; right: 41px; }
+.stack > .jack { top: -3px; left: 273px; }
+.shelf > .jack { top: -3px; left: 17px; }
+/* Play key on the stack and each shelf; its LED is lit on the unit feeding the CRT. */
+.srckey { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0; }
+.srckey.on .hled { background: oklch(0.7 0.18 145); box-shadow: 0 0 7px oklch(0.7 0.18 145); }
+.stack-head .srckey { align-self: center; }
 
 .stack {
+  position: relative;
   border-radius: 10px;
   padding: 14px 14px 18px;
   background: linear-gradient(180deg, #34322d, #24221e);
@@ -555,8 +571,9 @@ button.mini-label { cursor: pointer; }
 .mini-dur { flex: none; font-size: 18px; }
 .eject { width: 26px; padding: 0; font-size: 12px; }
 
-/* Watch later shelf: a free-standing wooden unit, deliberately not wired to the CRT. */
+/* Watch later shelf: a free-standing wooden unit; the cable can be patched into it to play from it directly. */
 .shelf {
+  position: relative;
   margin-top: 14px;
   padding: 12px 12px 6px;
   border-radius: 6px;
@@ -618,9 +635,15 @@ button.mini-label { cursor: pointer; }
   padding: 0 8px;
   border-radius: 1px;
   background: #fbf6ea;
+  border: none;
   border-left: 5px solid var(--badge, oklch(0.66 0.17 45));
   color: #2a2824;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+.spine-label.playing { background: oklch(0.76 0.15 58); }
+.spine-label.playing .spine-meta { color: #4a3a22; }
 .spine-title { font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .spine-meta { font-size: 13px; line-height: 1; color: #7a7364; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .shelf-empty { padding: 22px 0; text-align: center; font-size: 13px; color: #d9c29a; border-bottom: 7px solid #9b6a42; margin: 0 -8px; }

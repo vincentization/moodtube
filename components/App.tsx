@@ -16,6 +16,7 @@ import Stack from "./Stack";
 const STALE_MS = 30 * 60 * 1000; // auto-refresh on load if the cache is older than this
 const PAGE = 60;
 const SIDE_DEFAULT = 400;
+const NOW = "now"; // the Watch now stack's jack; shelves use their own id
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -26,6 +27,10 @@ export default function App() {
   const [sideWidth, setSideWidth] = useState(SIDE_DEFAULT);
   const [queue, setQueue] = useState<Video[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  // What the CRT plays from: the Watch now stack (null) or a Watch later shelf.
+  const [source, setSource] = useState<string | null>(null);
+  // Where each source was when the cable was patched elsewhere, so it resumes there.
+  const positions = useRef<Record<string, string | null>>({});
   const [playing, setPlaying] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,6 +65,7 @@ export default function App() {
     setSize(load<ThumbSize>("mt:thumbSize", "m"));
     setSideWidth(load("mt:sideWidth", SIDE_DEFAULT));
     setGroupId(load("mt:group", "all"));
+    setSource(load<string | null>("mt:source", null));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -76,7 +82,8 @@ export default function App() {
     save("mt:thumbSize", size);
     save("mt:group", groupId);
     save("mt:sideWidth", sideWidth);
-  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth]);
+    save("mt:source", source);
+  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth, source]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
@@ -106,11 +113,23 @@ export default function App() {
   const groupShelves = activeGroup
     ? []
     : (state?.groups ?? []).filter((g) => shelves.get(g.id)?.length).map((g) => ({ id: g.id, name: g.name }));
-  const visibleShelves = activeGroup
+  const shownShelves = activeGroup
     ? [{ id: shelf, name: activeGroup.name }]
     : shelves.get(ALL_SHELF)?.length || groupShelves.length === 0
       ? [{ id: ALL_SHELF, name: "All" }, ...groupShelves]
       : groupShelves;
+  // The shelf the cable is plugged into stays on display, even when it's empty or another group is selected.
+  const sourceGroup = source && source !== ALL_SHELF ? state?.groups.find((g) => g.id === source) : null;
+  const visibleShelves =
+    !source || shownShelves.some((sh) => sh.id === source)
+      ? shownShelves
+      : [...shownShelves, { id: source, name: source === ALL_SHELF ? "All" : (sourceGroup?.name ?? "") }];
+  const sourceList = source ? (shelves.get(source) ?? []) : queue;
+
+  // A deleted group takes its shelf with it; fall back to Watch now.
+  useEffect(() => {
+    if (state && source && source !== ALL_SHELF && !sourceGroup) setSource(null);
+  }, [state, source, sourceGroup]);
   const feed = useMemo(() => {
     if (!state) return [];
     const members = activeGroup ? new Set(activeGroup.channelIds) : null;
@@ -154,15 +173,42 @@ export default function App() {
     sync(api("/api/watched", "POST", { ids, watched: on }));
   }
 
-  // Removing items from Watch now; if the playing one goes, play moves to the next survivor.
-  function removeFromQueue(ids: string[]) {
+  // Items leaving the active source; if the playing one goes, play moves to the next survivor.
+  function skipPast(list: Video[], ids: string[]) {
     const gone = new Set(ids);
-    if (currentId && gone.has(currentId)) {
-      const from = queue.findIndex((v) => v.id === currentId);
-      setCurrentId(queue.slice(from + 1).find((v) => !gone.has(v.id))?.id ?? null);
-      if (!queue.slice(from + 1).some((v) => !gone.has(v.id))) setPlaying(false);
-    }
-    setQueue((q) => q.filter((v) => !gone.has(v.id)));
+    if (!currentId || !gone.has(currentId)) return;
+    const from = list.findIndex((v) => v.id === currentId);
+    const next = list.slice(from + 1).find((v) => !gone.has(v.id))?.id ?? null;
+    setCurrentId(next);
+    if (!next) setPlaying(false);
+  }
+
+  function removeFromQueue(ids: string[]) {
+    if (source === null) skipPast(queue, ids);
+    setQueue((q) => q.filter((v) => !ids.includes(v.id)));
+  }
+
+  // Patch the CRT into a source (null = Watch now), resuming where it left off unless told what to play.
+  function patch(next: string | null, play?: string) {
+    positions.current[source ?? NOW] = currentId;
+    const list = next ? (shelves.get(next) ?? []) : queue;
+    const resume = positions.current[next ?? NOW];
+    const pick = play ?? (list.some((v) => v.id === resume) ? resume : (list.find((v) => !watched.has(v.id)) ?? list[0])?.id) ?? null;
+    setSource(next);
+    setCurrentId(pick);
+    setPlaying(!!pick);
+  }
+
+  // A source's play key: patches the cable over, or play/pause once it's already plugged in.
+  function pressSource(next: string | null) {
+    if (next !== source || !currentId) patch(next);
+    else setPlaying(!playing);
+  }
+
+  function playFrom(next: string | null, id: string) {
+    if (next !== source) return patch(next, id);
+    setCurrentId(id);
+    setPlaying(true);
   }
 
   function toggleQueue(v: Video) {
@@ -177,6 +223,7 @@ export default function App() {
   }
 
   function removeLater(shelf: string, ids: string[]) {
+    if (source === shelf) skipPast(shelves.get(shelf) ?? [], ids);
     setState((s) => s && { ...s, later: s.later.filter((v) => v.shelf !== shelf || !ids.includes(v.id)) });
     sync(api("/api/later", "POST", { action: "remove", shelf, ids }));
   }
@@ -294,7 +341,7 @@ export default function App() {
 
           <div className="side">
             <Deck
-              queue={queue}
+              queue={sourceList}
               currentId={currentId}
               playing={playing}
               watched={watched}
@@ -304,15 +351,16 @@ export default function App() {
               onPlaying={setPlaying}
               onFinished={(id) => setWatched([id], true)}
             />
-            <Cable />
+            {/* Plugged in only once something from a source is loaded into the CRT. */}
+            <Cable target={currentId ? (source ?? NOW) : null} />
             <Stack
               queue={queue}
-              currentId={currentId}
+              currentId={source === null ? currentId : null}
+              active={source === null}
+              playing={playing}
               watched={watched}
-              onPlay={(id) => {
-                setCurrentId(id);
-                setPlaying(true);
-              }}
+              onSource={() => pressSource(null)}
+              onPlay={(id) => playFrom(null, id)}
               onReorder={reorderQueue}
               onEject={(id) => removeFromQueue([id])}
               onClearWatched={() => removeFromQueue(queue.filter((v) => watched.has(v.id)).map((v) => v.id))}
@@ -320,9 +368,15 @@ export default function App() {
             {visibleShelves.map((sh) => (
               <Shelf
                 key={sh.id}
+                id={sh.id}
                 name={sh.name}
                 badge={badges.get(sh.id)}
                 later={shelves.get(sh.id) ?? []}
+                currentId={source === sh.id ? currentId : null}
+                active={source === sh.id}
+                playing={playing}
+                onSource={() => pressSource(sh.id)}
+                onPlay={(id) => playFrom(sh.id, id)}
                 onReorder={(ids) => reorderLater(sh.id, ids)}
                 onRemove={(id) => removeLater(sh.id, [id])}
                 onToNow={(id) => laterToNow(sh.id, id)}
