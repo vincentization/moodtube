@@ -94,28 +94,32 @@ export default function Cartridge(p: Props) {
           <div
             className="hover-keys"
             onClick={(e) => {
-              if (canHover() && !p.inQueue && !(e.target as HTMLElement).closest("button")) p.onQueue();
+              if (canHover() && !p.inQueue && !(e.target as HTMLElement).closest(".rail")) p.onQueue();
             }}
           >
-            <button className={`ckey hkey later${p.inLater ? " on" : ""}`} onClick={p.onLater} title="Watch later" aria-pressed={p.inLater}>
-              <span className="hled" />
-              LATER
-            </button>
-            {p.groupLater.map(({ badge, on }) => (
-              <button
-                key={badge.id}
-                className={`ckey hkey later glater${on ? " on" : ""}`}
-                onClick={() => p.onGroupLater(badge.id)}
-                title={`Watch later on ${badge.name}`}
-                aria-pressed={on}
-              >
-                <span className="hled" />
-                <Badge group={badge} />
+            <div className="rail">
+              <button className={`rkey${p.inLater ? " on" : ""}`} onClick={p.onLater} title="Watch later" aria-label="Watch later" aria-pressed={p.inLater}>
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                  <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M8 4.5V8l2.5 1.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
-            ))}
-            <button className="ckey hkey more" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Groups" title="Groups">
-              ⋮
-            </button>
+              {p.groupLater.map(({ badge, on }) => (
+                <button
+                  key={badge.id}
+                  className={`rkey glater${on ? " on" : ""}`}
+                  onClick={() => p.onGroupLater(badge.id)}
+                  title={`Watch later on ${badge.name}`}
+                  aria-label={`Watch later on ${badge.name}`}
+                  aria-pressed={on}
+                >
+                  <Badge group={badge} />
+                </button>
+              ))}
+              <button className={`rkey more${menu ? " on" : ""}`} onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Groups" title="Groups">
+                ⋮
+              </button>
+            </div>
           </div>
         )}
       </div>

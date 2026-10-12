@@ -26,6 +26,8 @@ export default function App() {
   const [size, setSize] = useState<ThumbSize>("m");
   const [sideWidth, setSideWidth] = useState(SIDE_DEFAULT);
   const [queue, setQueue] = useState<Video[]>([]);
+  // Watch lists (NOW and each shelf, by jack id) folded down to their header.
+  const [folded, setFolded] = useState<string[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   // What the CRT plays from: the Watch now stack (null) or a Watch later shelf.
   const [source, setSource] = useState<string | null>(null);
@@ -65,6 +67,7 @@ export default function App() {
     setSize(load<ThumbSize>("mt:thumbSize", "m"));
     setSideWidth(load("mt:sideWidth", SIDE_DEFAULT));
     setGroupId(load("mt:group", "all"));
+    setFolded(load("mt:folded", []));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -81,7 +84,10 @@ export default function App() {
     save("mt:thumbSize", size);
     save("mt:group", groupId);
     save("mt:sideWidth", sideWidth);
-  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth]);
+    save("mt:folded", folded);
+  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth, folded]);
+
+  const toggleFold = (id: string) => setFolded((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
@@ -367,6 +373,8 @@ export default function App() {
               queue={queue}
               currentId={source === null ? currentId : null}
               active={source === null}
+              folded={folded.includes(NOW)}
+              onFold={() => toggleFold(NOW)}
               playing={playing}
               watched={watched}
               onSource={() => pressSource(null)}
@@ -384,6 +392,8 @@ export default function App() {
                 later={shelves.get(sh.id) ?? []}
                 currentId={source === sh.id ? currentId : null}
                 active={source === sh.id}
+                folded={folded.includes(sh.id)}
+                onFold={() => toggleFold(sh.id)}
                 playing={playing}
                 onSource={() => pressSource(sh.id)}
                 onPlay={(id) => playFrom(sh.id, id)}
