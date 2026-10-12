@@ -63,6 +63,7 @@ export default function Deck({ queue, currentId, playing, watched, onSelect, onP
   const index = currentId ? queue.findIndex((v) => v.id === currentId) : -1;
   const current = index >= 0 ? queue[index] : null;
   const nextId = index >= 0 ? (queue[index + 1]?.id ?? null) : null;
+  const prevId = index > 0 ? queue[index - 1].id : null;
   // PLAY with nothing loaded starts at the first unwatched item.
   const startItem = queue.find((v) => !watched.has(v.id)) ?? queue[0] ?? null;
 
@@ -171,11 +172,12 @@ export default function Deck({ queue, currentId, playing, watched, onSelect, onP
     onPlaying(!playing);
   }
 
-  function stop() {
+  // PREV steps back in the queue; on the first item it restarts the video instead.
+  function prev() {
     if (!currentId) return;
-    onPlaying(false);
-    playerRef.current?.seekTo(0, true);
-    playerRef.current?.pauseVideo();
+    setError(false);
+    if (prevId) onSelect(prevId);
+    else playerRef.current?.seekTo(0, true);
   }
 
   function next() {
@@ -215,21 +217,20 @@ export default function Deck({ queue, currentId, playing, watched, onSelect, onP
           )}
           <div className="glare" />
         </div>
-      </div>
-
-      <div className="transport">
-        <button className="tbtn play" onClick={togglePlay}>
-          <span className="glyph">{isPlaying ? "❚❚" : "▶"}</span>
-          <span className="word">{isPlaying ? "PAUSE" : "PLAY"}</span>
-        </button>
-        <button className="tbtn" onClick={stop}>
-          <span className="glyph stop">■</span>
-          <span className="word">STOP</span>
-        </button>
-        <button className="tbtn" onClick={next}>
-          <span className="glyph">▸▸</span>
-          <span className="word">NEXT</span>
-        </button>
+        <div className="transport">
+          <button className="tbtn" onClick={prev}>
+            <span className="glyph">◂◂</span>
+            <span className="word">PREV</span>
+          </button>
+          <button className="tbtn play" onClick={togglePlay}>
+            <span className="glyph">{isPlaying ? "❚❚" : "▶"}</span>
+            <span className="word">{isPlaying ? "PAUSE" : "PLAY"}</span>
+          </button>
+          <button className="tbtn" onClick={next}>
+            <span className="glyph">▸▸</span>
+            <span className="word">NEXT</span>
+          </button>
+        </div>
       </div>
     </>
   );

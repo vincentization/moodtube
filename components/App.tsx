@@ -198,6 +198,10 @@ export default function App() {
   }
 
   const later = state?.later ?? [];
+    setGroupId(id);
+  }
+
+  const later = state?.later ?? [];
   const cols = SIZE_COLUMNS[size];
 
   return (
@@ -257,13 +261,15 @@ export default function App() {
               currentId={currentId}
               playing={playing}
               watched={watched}
+              width={sideWidth}
+              onWidth={setSideWidth}
               onSelect={setCurrentId}
               onPlaying={setPlaying}
               onFinished={(id) => setWatched([id], true)}
             />
+            <Cable />
             <Stack
               queue={queue}
-              later={later}
               currentId={currentId}
               watched={watched}
               onPlay={(id) => {
