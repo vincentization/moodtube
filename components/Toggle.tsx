@@ -1,7 +1,6 @@
 "use client";
 
-// The design's knob switch: label printed on the knob, LED as the only state indicator.
-// "now" = orange knob + green LED, "later" = amber knob + amber LED.
+// Flat label + small square-cornered switch. "now" = green when on, "later" = amber.
 type Props = {
   label: string;
   on: boolean;
@@ -19,10 +18,10 @@ export default function Toggle({ label, on, tone, onClick, title }: Props) {
       role="switch"
       aria-checked={on}
     >
+      <span className="toggle-label">{label}</span>
       <span className="track">
-        <span className="knob">{label}</span>
+        <span className="knob" />
       </span>
-      <span className="toggle-led" />
     </button>
   );
 }
