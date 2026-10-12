@@ -68,18 +68,6 @@ button.badge, a.badge { cursor: pointer; }
 a.badge:hover { color: #3a3936; }
 button.badge:active, a.badge:active { transform: translateY(1px); box-shadow: inset 0 1px 0 #eee; }
 button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
-.clock {
-  padding: 4px 12px;
-  border-radius: 3px;
-  background: #100a08;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), 0 1px 0 #4a4740;
-  font-size: 26px;
-  line-height: 1;
-  color: oklch(0.68 0.2 30);
-  text-shadow: 0 0 8px oklch(0.68 0.2 30 / 0.7);
-  min-width: 79px;
-  text-align: center;
-}
 
 /* ---------- Body grid ---------- */
 .body {

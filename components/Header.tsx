@@ -1,27 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 type Props = {
   page: "feed" | "channels";
   refreshing?: boolean;
   onRefresh?: () => void;
 };
-
-function Clock() {
-  // Rendered after mount so server and client markup match.
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <div className="clock mono">
-      {now ? now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"}
-    </div>
-  );
-}
 
 export function Wordmark({ href }: { href?: string }) {
   return href ? (
@@ -69,8 +52,6 @@ export default function Header({ page, refreshing, onRefresh }: Props) {
             LOG OUT
           </button>
         </form>
-        <div className="badge">STEREO · HI-FI</div>
-        <Clock />
       </div>
     </div>
   );
