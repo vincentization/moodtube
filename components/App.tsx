@@ -186,7 +186,14 @@ export default function App() {
   function createGroup(name: string) {
     if (!state) return;
     const id = crypto.randomUUID();
+  function createGroup(name: string) {
+    if (!state) return;
+    const id = crypto.randomUUID();
     saveGroups([...state.groups, { id, name, channelIds: [], rules: {} }]);
+    setGroupId(id);
+  }
+
+  const later = state?.later ?? [];
     setGroupId(id);
   }
 
@@ -200,6 +207,7 @@ export default function App() {
         <div className="body">
           <ChannelSelect
             groups={state?.groups ?? []}
+            badges={badges}
             groupId={activeGroup ? groupId : "all"}
             onGroup={setGroupId}
             onAddGroup={createGroup}
@@ -230,8 +238,8 @@ export default function App() {
                     num={i + 1}
                     inQueue={queueIds.has(v.id)}
                     inLater={laterIds.has(v.id)}
-                    watched={watched.has(v.id)}
                     groups={state.groups}
+                    badges={channelBadges.get(v.channelId) ?? []}
                     onQueue={() => toggleQueue(v)}
                     onLater={() => toggleLater(v)}
                     onToggleGroup={(gid, on) => setChannelInGroup(v.channelId, gid, on)}

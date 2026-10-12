@@ -67,21 +67,6 @@ export default function Cartridge(p: Props) {
               <img src={thumbUrl(p.video.id)} alt="" loading="lazy" />
               <span className="dur mono">{durLabel(p.video.duration)}</span>
               {isRecent(p.video.published) && !p.watched && <span className="new">NEW</span>}
-              {active && (
-                <div className="hover-keys">
-                  <button className={`ckey hkey now${p.inQueue ? " on" : ""}`} onClick={p.onQueue} title="Watch now" aria-pressed={p.inQueue}>
-                    <span className="hled" />
-                    NOW
-                  </button>
-                  <button className={`ckey hkey later${p.inLater ? " on" : ""}`} onClick={p.onLater} title="Watch later" aria-pressed={p.inLater}>
-                    <span className="hled" />
-                    LATER
-                  </button>
-                  <button className="ckey hkey" onClick={() => setMenu(!menu)} aria-expanded={menu}>
-                    GROUPS
-                  </button>
-                </div>
-              )}
             </div>
             <div className="label-text">
               <span className="title2" title={p.video.title}>
@@ -94,6 +79,26 @@ export default function Cartridge(p: Props) {
           </div>
         </div>
         <div className="connector" />
+        {active && (
+          <div
+            className="hover-keys"
+            onClick={(e) => {
+              if (canHover() && !p.inQueue && !(e.target as HTMLElement).closest("button")) p.onQueue();
+            }}
+          >
+            <button className={`ckey hkey now${p.inQueue ? " on" : ""}`} onClick={p.onQueue} title="Watch now" aria-pressed={p.inQueue}>
+              <span className="hled" />
+              NOW
+            </button>
+            <button className={`ckey hkey later${p.inLater ? " on" : ""}`} onClick={p.onLater} title="Watch later" aria-pressed={p.inLater}>
+              <span className="hled" />
+              LATER
+            </button>
+            <button className="ckey hkey more" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Groups" title="Groups">
+              ⋮
+            </button>
+          </div>
+        )}
       </div>
 
       {active && menu && (
