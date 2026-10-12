@@ -183,6 +183,13 @@ export default function App() {
     saveGroups([...state.groups, { id: crypto.randomUUID(), name, channelIds: [channelId], rules: {} }]);
   }
 
+  function createGroup(name: string) {
+    if (!state) return;
+    const id = crypto.randomUUID();
+    saveGroups([...state.groups, { id, name, channelIds: [], rules: {} }]);
+    setGroupId(id);
+  }
+
   const later = state?.later ?? [];
   const cols = SIZE_COLUMNS[size];
 
@@ -195,16 +202,17 @@ export default function App() {
             groups={state?.groups ?? []}
             groupId={activeGroup ? groupId : "all"}
             onGroup={setGroupId}
+            onAddGroup={createGroup}
             hideWatched={hideWatched}
             onHideWatched={setHideWatched}
             hideShorts={hideShorts}
             onHideShorts={setHideShorts}
             size={size}
             onSize={setSize}
+            status={status}
           />
 
           <div className="feed">
-            {status && <div className="empty">{status}</div>}
             {!state ? (
               !status && <div className="empty">Loading…</div>
             ) : state.channels.length === 0 ? (

@@ -106,6 +106,7 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
   box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.22), inset 0 -1px 0 #ece6d7;
 }
 .tray-label { font-size: 11px; letter-spacing: 0.26em; color: #6e6757; font-weight: 700; text-shadow: 0 1px 0 #ece6d7; }
+.tray-section { display: flex; flex-direction: column; gap: 10px; }
 .keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .key {
   position: relative;
@@ -143,7 +144,31 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.toggles { display: flex; flex-direction: column; gap: 8px; }
+/* Add-group key: a recessed, dashed slot that becomes a name field when pressed. */
+.key-add {
+  background: transparent;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+  outline: 2px dashed #a99e85;
+  outline-offset: -2px;
+  color: #6e6757;
+}
+.key-add:hover { color: #2a2824; outline-color: #8a8475; }
+.key-add.editing { cursor: text; background: linear-gradient(#f5f0e4, #e0d7c3); outline-style: solid; }
+.key-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2a2824;
+  outline: none;
+}
+.key-input::placeholder { color: #a99e85; }
+.toggles { display: flex; flex-direction: column; gap: 2px; }
 /* Thumbnail size: small cream keys reusing the channel-key off/on styles. */
 .size-keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .size-key {
@@ -228,6 +253,8 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 /* ---------- 2. Feed ---------- */
 .feed { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .rack { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 14px 12px; padding: 0 0 8px; }
+/* Refresh status, printed on the console below the tray rather than inside it. */
+.status-line { padding: 0 4px; font-size: 12px; line-height: 1.4; color: #6e6757; text-shadow: 0 1px 0 #ece6d7; text-wrap: pretty; }
 .empty { padding: 26px 0; text-align: center; font-size: 13px; color: #8a8475; }
 
 .cart { position: relative; z-index: 1; }
@@ -239,6 +266,11 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
   border-radius: 6px 6px 3px 3px;
   box-shadow: inset 0 2px 0 #dcd8cf, inset 2px 0 0 #cfcac0, inset -2px 0 0 #948e82, 0 3px 0 #6f6a60, 0 8px 10px rgba(0, 0, 0, 0.4);
 }
+.cart .face { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.cart.active .face { transform: translateY(-4px); box-shadow: inset 0 2px 0 #dcd8cf, inset 2px 0 0 #cfcac0, inset -2px 0 0 #948e82, 0 3px 0 #6f6a60, 0 14px 16px rgba(0, 0, 0, 0.45); }
+.thumb { overflow: hidden; cursor: pointer; }
+.thumb img { transition: transform 0.25s ease, filter 0.2s ease; }
+@media (prefers-reduced-motion: reduce) { .cart .face, .thumb img { transition: none; } .cart.active .face { transform: none; } }
 .face.front { background: linear-gradient(180deg, #c4bfb4 0%, #b3ada1 60%, #a49e91 100%); }
 .ridges { display: flex; flex-direction: column; gap: 2px; padding: 5px 14px 4px; }
 .ridges span { height: 2px; border-radius: 1px; background: #948e82; box-shadow: 0 1px 0 #d6d1c7; }
@@ -246,8 +278,8 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
   margin: 5px 20px 0;
   height: 5px;
   border-radius: 0 0 2px 2px;
-  background: repeating-linear-gradient(90deg, #c9a24a 0 3px, #2a2824 3px 5px);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+  background: repeating-linear-gradient(90deg, #aaa07f 0 3px, #8e887b 3px 5px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .well { margin: 0 7px; padding: 4px; border-radius: 3px; background: #9a9488; box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45), 0 1px 0 #d6d1c7; }
 .label { border-radius: 2px; background: #f3ecda; overflow: hidden; }
@@ -264,22 +296,12 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 }
 .thumb { position: relative; aspect-ratio: 16 / 9; background: repeating-linear-gradient(135deg, #cfc5ad 0 6px, #d8cfba 6px 12px); }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.new {
-  position: absolute;
-  right: 5px;
-  top: 5px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: oklch(0.62 0.16 30);
-  color: #fff;
-  display: flex;
+/* Group badges: a colored tag per group, set via --badge. */
+.gbadge {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  transform: rotate(-12deg);
+.tray-status { font-size: 12px; line-height: 1.4; color: #4a4538; text-wrap: pretty; }
 }
 .label-text { padding: 5px 6px 6px; display: flex; flex-direction: column; gap: 2px; }
 .title2 {
