@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { GroupBadge } from "@/lib/groups";
 import type { Group } from "@/lib/types";
+import Badge from "./Badge";
 import Toggle from "./Toggle";
 
 export type ThumbSize = "s" | "m" | "l";
@@ -9,6 +11,7 @@ export const SIZE_COLUMNS: Record<ThumbSize, number> = { s: 5, m: 4, l: 3 };
 
 type Props = {
   groups: Group[];
+  badges: Map<string, GroupBadge>;
   groupId: string;
   onGroup: (id: string) => void;
   onAddGroup: (name: string) => void;
@@ -43,6 +46,7 @@ export default function ChannelSelect(props: Props) {
         <div className="keys">
           {keys.map((k, i) => {
             const on = k.id === props.groupId;
+            const badge = props.badges.get(k.id);
             return (
               <button
                 key={k.id}
@@ -51,9 +55,11 @@ export default function ChannelSelect(props: Props) {
                 title={k.name}
               >
                 <span className="key-led" />
-                <span className="key-idx mono">
-                  {String(i).padStart(2, "0")}
-                </span>
+                {badge ? (
+                  <Badge group={badge} className="lg" />
+                ) : (
+                  <span className="key-idx mono">{String(i).padStart(2, "0")}</span>
+                )}
                 <span className="key-name">{k.name}</span>
               </button>
             );

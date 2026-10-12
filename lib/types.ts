@@ -6,7 +6,7 @@ export type Rules = {
   noShorts?: boolean;
 };
 
-export type Group = { id: string; name: string; channelIds: string[]; rules: Rules };
+export type Group = { id: string; name: string; channelIds: string[]; rules: Rules; color?: string };
 
 export type Video = {
   id: string;

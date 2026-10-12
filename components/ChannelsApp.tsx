@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
+import { nextGroupColor } from "@/lib/groups";
 import type { AppState, Group, Rules } from "@/lib/types";
 import Header from "./Header";
 import Toggle from "./Toggle";
@@ -75,7 +76,7 @@ export default function ChannelsApp() {
   function createGroup() {
     const name = newName.trim();
     if (!name) return;
-    const group: Group = { id: crypto.randomUUID(), name, channelIds: [], rules: {} };
+    const group: Group = { id: crypto.randomUUID(), name, channelIds: [], rules: {}, color: nextGroupColor(groups) };
     saveGroups([...groups, group]);
     setSelectedId(group.id);
     setNewName("");

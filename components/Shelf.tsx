@@ -1,11 +1,14 @@
 "use client";
 
 import { durLabel, totalLabel } from "@/lib/format";
+import type { GroupBadge } from "@/lib/groups";
 import type { Video } from "@/lib/types";
+import Badge from "./Badge";
 import { useReorder } from "./useReorder";
 
 type Props = {
   name: string;
+  badge?: GroupBadge; // absent for the ALL shelf
   later: Video[];
   onReorder: (ids: string[]) => void;
   onRemove: (id: string) => void;
@@ -21,8 +24,9 @@ export default function Shelf(p: Props) {
   const total = p.later.reduce((n, v) => n + (v.duration ?? 0), 0);
 
   return (
-    <div className="shelf">
+    <div className="shelf" style={p.badge ? ({ "--badge": p.badge.color } as React.CSSProperties) : undefined}>
       <div className="shelf-head">
+        {p.badge && <Badge group={p.badge} className="lg" />}
         <span className="shelf-plate" title={`Watch later for ${p.name}`}>
           {p.name.toUpperCase()} · LATER · {p.later.length}
         </span>

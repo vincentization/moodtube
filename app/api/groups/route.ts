@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { saveGroups } from "@/lib/store";
+import { GROUP_COLORS } from "@/lib/groups";
 import type { Group } from "@/lib/types";
 
 export async function PUT(request: NextRequest) {
@@ -14,6 +15,7 @@ export async function PUT(request: NextRequest) {
       minMinutes: g.rules?.minMinutes && g.rules.minMinutes > 0 ? Number(g.rules.minMinutes) : undefined,
       noShorts: !!g.rules?.noShorts || undefined,
     },
+    color: GROUP_COLORS.includes(String(g.color)) ? String(g.color) : undefined,
   }));
   await saveGroups(clean);
   return NextResponse.json({ ok: true });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, load, save } from "@/lib/client";
 import { matchesRules } from "@/lib/format";
+import { groupBadges, nextGroupColor, type GroupBadge } from "@/lib/groups";
 import { ALL_SHELF, type AppState, type Group, type LaterItem, type Video } from "@/lib/types";
 import Cartridge from "./Cartridge";
 import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
@@ -208,26 +209,12 @@ export default function App() {
     setState((s) => s && { ...s, groups });
     sync(api("/api/groups", "PUT", { groups }));
   }
-  // Each group has its own Watch later shelf; LATER on a cartridge files it on the current one.
-  const shelf = activeGroup ? activeGroup.id : ALL_SHELF;
-  const shelves = useMemo(() => {
-    const by = new Map<string, LaterItem[]>();
-    for (const v of [...(state?.later ?? [])].sort((a, b) => a.addedAt - b.addedAt)) {
-      by.set(v.shelf, [...(by.get(v.shelf) ?? []), v]);
-    }
-    return by;
-  }, [state?.later]);
-  const later = shelves.get(shelf) ?? [];
-  const laterIds = useMemo(() => new Set(later.map((v) => v.id)), [later]);
-  // On ALL, every group's non-empty shelf is on display too, after ALL's own (shown if filled, or if nothing is).
-  const groupShelves = activeGroup
-    ? []
-    : (state?.groups ?? []).filter((g) => shelves.get(g.id)?.length).map((g) => ({ id: g.id, name: g.name }));
-  const visibleShelves = activeGroup
-    ? [{ id: shelf, name: activeGroup.name }]
-    : shelves.get(ALL_SHELF)?.length || groupShelves.length === 0
-      ? [{ id: ALL_SHELF, name: "All" }, ...groupShelves]
-      : groupShelves;
+
+  // Groups made before badge colors existed: save the colors they're shown with so they stay put.
+  useEffect(() => {
+    if (!state?.groups.some((g) => !g.color)) return;
+    saveGroups(state.groups.map((g) => ({ ...g, color: badges.get(g.id)!.color })));
+  }, [state?.groups, badges]);
 
   function setChannelInGroup(channelId: string, gid: string, on: boolean) {
     if (!state) return;

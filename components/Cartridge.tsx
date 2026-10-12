@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ageShort, durLabel, isRecent, thumbUrl } from "@/lib/format";
+import type { GroupBadge } from "@/lib/groups";
 import type { Group, Video } from "@/lib/types";
+import Badge from "./Badge";
 
 type Props = {
   video: Video;
@@ -11,6 +13,7 @@ type Props = {
   inLater: boolean;
   watched: boolean;
   groups: Group[];
+  badges: GroupBadge[];
   onQueue: () => void;
   onLater: () => void;
   onToggleGroup: (groupId: string, on: boolean) => void;
@@ -57,6 +60,13 @@ export default function Cartridge(p: Props) {
       }}
     >
       <div className="face front">
+        {p.badges.length > 0 && (
+          <span className="badges">
+            {p.badges.map((b) => (
+              <Badge key={b.id} group={b} />
+            ))}
+          </span>
+        )}
         <div className="ridges">
           <span />
           <span />
