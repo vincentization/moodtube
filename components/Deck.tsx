@@ -41,24 +41,29 @@ const PAUSED = 2;
 const BUFFERING = 3;
 const UNPLAYABLE = new Set([2, 5, 100, 101, 150]); // bad id, HTML5 error, removed, embedding disabled
 const AUTO_SKIP_MS = 4000;
+const MIN_WIDTH = 320;
+const MIN_FEED = 300; // leave at least this much room for the cartridge rack
 
 type Props = {
   queue: Video[];
   currentId: string | null;
   playing: boolean;
   watched: Set<string>;
+  width: number;
+  onWidth: (width: number) => void;
   onSelect: (id: string | null) => void;
   onPlaying: (playing: boolean) => void;
   onFinished: (id: string) => void;
 };
 
-export default function Deck({ queue, currentId, playing, watched, onSelect, onPlaying, onFinished }: Props) {
+export default function Deck({ queue, currentId, playing, watched, width, onWidth, onSelect, onPlaying, onFinished }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
   const loadedRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
+  const [resizing, setResizing] = useState(false);
 
   const index = currentId ? queue.findIndex((v) => v.id === currentId) : -1;
   const current = index >= 0 ? queue[index] : null;

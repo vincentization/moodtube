@@ -9,6 +9,7 @@ import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
 import Cable from "./Cable";
 import Deck from "./Deck";
 import Header from "./Header";
+import Shelf from "./Shelf";
 import Stack from "./Stack";
 
 const STALE_MS = 30 * 60 * 1000; // auto-refresh on load if the cache is older than this
@@ -20,6 +21,7 @@ export default function App() {
   const [hideWatched, setHideWatched] = useState(true);
   const [hideShorts, setHideShorts] = useState(true);
   const [size, setSize] = useState<ThumbSize>("m");
+  const [sideWidth, setSideWidth] = useState(SIDE_DEFAULT);
   const [queue, setQueue] = useState<Video[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -54,6 +56,7 @@ export default function App() {
     setHideWatched(load("mt:hideWatched", true));
     setHideShorts(load("mt:hideShorts", true));
     setSize(load<ThumbSize>("mt:thumbSize", "m"));
+    setSideWidth(load("mt:sideWidth", SIDE_DEFAULT));
     setGroupId(load("mt:group", "all"));
     restored.current = true;
     loadState()
@@ -70,10 +73,10 @@ export default function App() {
     save("mt:hideShorts", hideShorts);
     save("mt:thumbSize", size);
     save("mt:group", groupId);
-  }, [queue, hideWatched, hideShorts, size, groupId]);
+    save("mt:sideWidth", sideWidth);
+  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
-  const laterIds = useMemo(() => new Set(state?.later.map((v) => v.id) ?? []), [state?.later]);
   const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
 
   const activeGroup = state?.groups.find((g) => g.id === groupId) ?? null;
@@ -194,15 +197,10 @@ export default function App() {
     setGroupId(id);
   }
 
-  const later = state?.later ?? [];
-    setGroupId(id);
-  }
-
-  const later = state?.later ?? [];
-    setGroupId(id);
-  }
-
-  const later = state?.later ?? [];
+  function createGroup(name: string) {
+    if (!state) return;
+    const id = crypto.randomUUID();
+    saveGroups([...state.groups, { id, name, channelIds: [], rules: {} }]);
     setGroupId(id);
   }
 
@@ -213,7 +211,7 @@ export default function App() {
     <div className="page">
       <div className="console">
         <Header page="feed" refreshing={refreshing} onRefresh={refresh} />
-        <div className="body">
+        <div className="body" style={{ "--crt": `${sideWidth}px` } as React.CSSProperties}>
           <ChannelSelect
             groups={state?.groups ?? []}
             badges={badges}
