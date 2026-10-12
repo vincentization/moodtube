@@ -65,7 +65,6 @@ export default function App() {
     setSize(load<ThumbSize>("mt:thumbSize", "m"));
     setSideWidth(load("mt:sideWidth", SIDE_DEFAULT));
     setGroupId(load("mt:group", "all"));
-    setSource(load<string | null>("mt:source", null));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -82,8 +81,7 @@ export default function App() {
     save("mt:thumbSize", size);
     save("mt:group", groupId);
     save("mt:sideWidth", sideWidth);
-    save("mt:source", source);
-  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth, source]);
+  }, [queue, hideWatched, hideShorts, size, groupId, sideWidth]);
 
   const watched = useMemo(() => new Set(state?.watched ?? []), [state?.watched]);
   const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
@@ -107,8 +105,8 @@ export default function App() {
     }
     return by;
   }, [state?.later]);
-  const later = shelves.get(shelf) ?? [];
-  const laterIds = useMemo(() => new Set(later.map((v) => v.id)), [later]);
+  const shelfIds = useMemo(() => new Map([...shelves].map(([k, vs]) => [k, new Set(vs.map((v) => v.id))])), [shelves]);
+  const laterIds = shelfIds.get(shelf) ?? new Set<string>();
   // On ALL, every group's non-empty shelf is on display too, after ALL's own (shown if filled, or if nothing is).
   const groupShelves = activeGroup
     ? []
@@ -126,10 +124,16 @@ export default function App() {
       : [...shownShelves, { id: source, name: source === ALL_SHELF ? "All" : (sourceGroup?.name ?? "") }];
   const sourceList = source ? (shelves.get(source) ?? []) : queue;
 
-  // A deleted group takes its shelf with it; fall back to Watch now.
+  // A shelf is the source only while something from it is loaded; when it runs out (or its group is
+  // deleted) the cable unplugs and Watch now is the default again.
   useEffect(() => {
-    if (state && source && source !== ALL_SHELF && !sourceGroup) setSource(null);
-  }, [state, source, sourceGroup]);
+    if (!source) return;
+    if (state && source !== ALL_SHELF && !sourceGroup) {
+      setCurrentId(null);
+      setPlaying(false);
+    }
+    if (!currentId || (state && source !== ALL_SHELF && !sourceGroup)) setSource(null);
+  }, [state, source, sourceGroup, currentId]);
   const feed = useMemo(() => {
     if (!state) return [];
     const members = activeGroup ? new Set(activeGroup.channelIds) : null;
@@ -216,10 +220,10 @@ export default function App() {
     else setQueue((q) => [...q, v]);
   }
 
-  function toggleLater(v: Video) {
-    if (laterIds.has(v.id)) return removeLater(shelf, [v.id]);
-    setState((s) => s && { ...s, later: [...s.later, { ...v, shelf, addedAt: Date.now() }] });
-    sync(api("/api/later", "POST", { action: "add", shelf, videos: [v] }));
+  function toggleLater(v: Video, to = shelf) {
+    if (shelfIds.get(to)?.has(v.id)) return removeLater(to, [v.id]);
+    setState((s) => s && { ...s, later: [...s.later, { ...v, shelf: to, addedAt: Date.now() }] });
+    sync(api("/api/later", "POST", { action: "add", shelf: to, videos: [v] }));
   }
 
   function removeLater(shelf: string, ids: string[]) {
@@ -326,10 +330,16 @@ export default function App() {
                     num={i + 1}
                     inQueue={queueIds.has(v.id)}
                     inLater={laterIds.has(v.id)}
+                    groupLater={
+                      activeGroup
+                        ? []
+                        : (channelBadges.get(v.channelId) ?? []).map((b) => ({ badge: b, on: !!shelfIds.get(b.id)?.has(v.id) }))
+                    }
                     groups={state.groups}
                     badges={channelBadges.get(v.channelId) ?? []}
                     onQueue={() => toggleQueue(v)}
                     onLater={() => toggleLater(v)}
+                    onGroupLater={(gid) => toggleLater(v, gid)}
                     onToggleGroup={(gid, on) => setChannelInGroup(v.channelId, gid, on)}
                     onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
                   />

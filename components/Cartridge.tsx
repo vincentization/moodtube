@@ -11,10 +11,13 @@ type Props = {
   num: number;
   inQueue: boolean;
   inLater: boolean;
+  // On the ALL page: a LATER key per group the channel is in, filing it on that group's shelf.
+  groupLater: { badge: GroupBadge; on: boolean }[];
   groups: Group[];
   badges: GroupBadge[];
   onQueue: () => void;
   onLater: () => void;
+  onGroupLater: (groupId: string) => void;
   onToggleGroup: (groupId: string, on: boolean) => void;
   onCreateGroup: (name: string) => void;
 };
@@ -94,14 +97,22 @@ export default function Cartridge(p: Props) {
               if (canHover() && !p.inQueue && !(e.target as HTMLElement).closest("button")) p.onQueue();
             }}
           >
-            <button className={`ckey hkey now${p.inQueue ? " on" : ""}`} onClick={p.onQueue} title="Watch now" aria-pressed={p.inQueue}>
-              <span className="hled" />
-              NOW
-            </button>
             <button className={`ckey hkey later${p.inLater ? " on" : ""}`} onClick={p.onLater} title="Watch later" aria-pressed={p.inLater}>
               <span className="hled" />
               LATER
             </button>
+            {p.groupLater.map(({ badge, on }) => (
+              <button
+                key={badge.id}
+                className={`ckey hkey later glater${on ? " on" : ""}`}
+                onClick={() => p.onGroupLater(badge.id)}
+                title={`Watch later on ${badge.name}`}
+                aria-pressed={on}
+              >
+                <span className="hled" />
+                <Badge group={badge} />
+              </button>
+            ))}
             <button className="ckey hkey more" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Groups" title="Groups">
               ⋮
             </button>

@@ -339,9 +339,10 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 .cart.active .label { background: #2a2722; }
 .hkey { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; }
 .hover-keys .hkey { flex: 1 1 0; height: 34%; min-height: 32px; font-size: 13px; letter-spacing: 0.2em; }
+.hover-keys .hkey.glater { flex: 0 0 auto; padding: 0 8px; }
+.hkey.glater .gbadge { pointer-events: none; }
 .hover-keys .hkey.more { flex: 0 0 34px; padding: 0; font-size: 18px; letter-spacing: 0; line-height: 1; }
 .hled { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #5c574b; }
-.hkey.now.on .hled { background: oklch(0.7 0.18 145); box-shadow: 0 0 7px oklch(0.7 0.18 145); }
 .hkey.later.on .hled { background: oklch(0.8 0.15 85); box-shadow: 0 0 7px oklch(0.8 0.15 85); }
 .okey {
   flex: none;
