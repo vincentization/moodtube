@@ -186,6 +186,36 @@ export default function Deck({ queue, currentId, playing, watched, onSelect, onP
     advance();
   }
 
+  // Dragging the lower-left grip left or down widens the CRT; the 16:9 screen grows with it.
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const grip = e.currentTarget;
+    grip.setPointerCapture(e.pointerId);
+    const body = grip.closest(".body");
+    // Widest CRT that still leaves the tray (200), gaps (2×22), padding (2×28) and a minimum feed.
+    const max = Math.max(MIN_WIDTH, (body?.clientWidth ?? window.innerWidth) - 200 - 44 - 56 - MIN_FEED);
+    const start = { x: e.clientX, y: e.clientY, width };
+    setResizing(true);
+    document.documentElement.classList.add("resizing");
+
+    const move = (ev: PointerEvent) => {
+      const dx = start.x - ev.clientX;
+      const dy = ((ev.clientY - start.y) * 16) / 9;
+      const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      onWidth(Math.round(Math.min(max, Math.max(MIN_WIDTH, start.width + delta))));
+    };
+    const end = () => {
+      setResizing(false);
+      document.documentElement.classList.remove("resizing");
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", end);
+      grip.removeEventListener("pointercancel", end);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+  }
+
   const isPlaying = playing && !!currentId;
 
   return (
@@ -193,6 +223,12 @@ export default function Deck({ queue, currentId, playing, watched, onSelect, onP
       <div className="bezel">
         <span className="screw l" />
         <span className="screw r" />
+        <div
+          className={`resize-grip${resizing ? " on" : ""}`}
+          onPointerDown={startResize}
+          onDoubleClick={() => onWidth(400)}
+          title="Drag to resize · double-click to reset"
+        />
         <div className="screen">
           <div ref={hostRef} className="screen-host" />
           {(!currentId || error) && (

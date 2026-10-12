@@ -6,6 +6,7 @@ import { matchesRules } from "@/lib/format";
 import type { AppState, Group, Video } from "@/lib/types";
 import Cartridge from "./Cartridge";
 import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
+import Cable from "./Cable";
 import Deck from "./Deck";
 import Header from "./Header";
 import Stack from "./Stack";
@@ -202,6 +203,10 @@ export default function App() {
   }
 
   const later = state?.later ?? [];
+    setGroupId(id);
+  }
+
+  const later = state?.later ?? [];
   const cols = SIZE_COLUMNS[size];
 
   return (
@@ -276,11 +281,21 @@ export default function App() {
                 setCurrentId(id);
                 setPlaying(true);
               }}
-              onReorder={reorder}
-              onEject={(list, id) => (list === "queue" ? removeFromQueue([id]) : removeLater([id]))}
-              onLaterToNow={laterToNow}
+              onReorder={reorderQueue}
+              onEject={(id) => removeFromQueue([id])}
               onClearWatched={() => removeFromQueue(queue.filter((v) => watched.has(v.id)).map((v) => v.id))}
             />
+            {visibleShelves.map((sh) => (
+              <Shelf
+                key={sh.id}
+                name={sh.name}
+                badge={badges.get(sh.id)}
+                later={shelves.get(sh.id) ?? []}
+                onReorder={(ids) => reorderLater(sh.id, ids)}
+                onRemove={(id) => removeLater(sh.id, [id])}
+                onToNow={(id) => laterToNow(sh.id, id)}
+              />
+            ))}
           </div>
         </div>
       </div>
