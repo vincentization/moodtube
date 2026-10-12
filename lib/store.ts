@@ -1,5 +1,5 @@
 import { K, db } from "./redis";
-import type { AppState, Channel, Group, LaterItem, Video } from "./types";
+import { ALL_SHELF, type AppState, type Channel, type Group, type LaterItem, type Video } from "./types";
 import { fetchDurations, fetchFeed, mapLimit } from "./youtube";
 
 const SHORT_MAX_SECONDS = 60;
@@ -10,7 +10,7 @@ export async function getState(): Promise<AppState> {
     db().get<Group[]>(K.groups),
     db().hgetall<Record<string, Video[]>>(K.videos),
     db().smembers(K.watched),
-    db().hgetall<Record<string, LaterItem>>(K.later),
+    getLater(),
     db().get<number>(K.lastRefresh),
   ]);
   return {
@@ -20,7 +20,7 @@ export async function getState(): Promise<AppState> {
       .flat()
       .sort((a, b) => b.published.localeCompare(a.published)),
     watched,
-    later: Object.values(later ?? {}).sort((a, b) => a.addedAt - b.addedAt),
+    later: Object.values(later).sort((a, b) => a.addedAt - b.addedAt),
     lastRefresh: lastRefresh ?? null,
   };
 }
@@ -110,35 +110,60 @@ export async function refreshAll(): Promise<{ channels: number; failed: string[]
 
 export async function saveGroups(groups: Group[]) {
   await db().set(K.groups, groups);
+  // A deleted group takes its Watch later shelf with it.
+  const keep = new Set([ALL_SHELF, ...groups.map((g) => g.id)]);
+  const later = await getLater();
+  const orphans = Object.keys(later).filter((key) => !keep.has(later[key].shelf));
+  if (orphans.length) await db().hdel(K.later, ...orphans);
 }
 
 export async function setWatched(ids: string[], watched: boolean) {
   if (ids.length === 0) return;
   if (watched) {
-    // Watching something also clears it from Watch later.
-    await Promise.all([db().sadd(K.watched, ids[0], ...ids.slice(1)), db().hdel(K.later, ...ids)]);
+    // Watching something also clears it from every Watch later shelf.
+    const later = await getLater();
+    const gone = new Set(ids);
+    const keys = Object.keys(later).filter((key) => gone.has(later[key].id));
+    await Promise.all([db().sadd(K.watched, ids[0], ...ids.slice(1)), keys.length ? db().hdel(K.later, ...keys) : null]);
   } else {
     await db().srem(K.watched, ...ids);
   }
 }
 
-export async function addLater(videos: Video[]) {
+const laterKey = (shelf: string, id: string) => `${shelf}|${id}`;
+
+// Items saved before shelves existed are keyed by bare video id; move them to the ALL shelf on first read.
+async function getLater(): Promise<Record<string, LaterItem>> {
+  const raw = (await db().hgetall<Record<string, LaterItem>>(K.later)) ?? {};
+  const legacy = Object.keys(raw).filter((key) => !key.includes("|"));
+  if (legacy.length === 0) return raw;
+  const moved = legacy.map((key) => [laterKey(ALL_SHELF, key), { ...raw[key], shelf: ALL_SHELF }] as const);
+  await db().hset(K.later, Object.fromEntries(moved));
+  await db().hdel(K.later, ...legacy);
+  for (const key of legacy) delete raw[key];
+  return { ...raw, ...Object.fromEntries(moved) };
+}
+
+export async function addLater(shelf: string, videos: Video[]) {
   if (videos.length === 0) return;
   const now = Date.now();
   await db().hset(
     K.later,
-    Object.fromEntries(videos.map((v, i) => [v.id, { ...v, addedAt: now + i }])),
+    Object.fromEntries(videos.map((v, i) => [laterKey(shelf, v.id), { ...v, shelf, addedAt: now + i }])),
   );
 }
 
-export async function removeLater(ids: string[]) {
-  if (ids.length) await db().hdel(K.later, ...ids);
+export async function removeLater(shelf: string, ids: string[]) {
+  if (ids.length) await db().hdel(K.later, ...ids.map((id) => laterKey(shelf, id)));
 }
 
-// Watch later is ordered by addedAt, so a reorder rewrites those timestamps in the new order.
-export async function reorderLater(ids: string[]) {
-  const items = (await db().hgetall<Record<string, LaterItem>>(K.later)) ?? {};
+// A shelf is ordered by addedAt, so a reorder rewrites those timestamps in the new order.
+export async function reorderLater(shelf: string, ids: string[]) {
+  const items = await getLater();
   const base = Date.now();
-  const updates = ids.filter((id) => items[id]).map((id, i) => [id, { ...items[id], addedAt: base + i }] as const);
+  const updates = ids
+    .map((id) => laterKey(shelf, id))
+    .filter((key) => items[key])
+    .map((key, i) => [key, { ...items[key], addedAt: base + i }] as const);
   if (updates.length) await db().hset(K.later, Object.fromEntries(updates));
 }

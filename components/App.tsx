@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, load, save } from "@/lib/client";
 import { matchesRules } from "@/lib/format";
-import type { AppState, Group, Video } from "@/lib/types";
+import { ALL_SHELF, type AppState, type Group, type LaterItem, type Video } from "@/lib/types";
 import Cartridge from "./Cartridge";
 import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
 import Cable from "./Cable";
@@ -14,6 +14,7 @@ import Stack from "./Stack";
 
 const STALE_MS = 30 * 60 * 1000; // auto-refresh on load if the cache is older than this
 const PAGE = 60;
+const SIDE_DEFAULT = 400;
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -80,6 +81,35 @@ export default function App() {
   const queueIds = useMemo(() => new Set(queue.map((v) => v.id)), [queue]);
 
   const activeGroup = state?.groups.find((g) => g.id === groupId) ?? null;
+  const badges = useMemo(() => groupBadges(state?.groups ?? []), [state?.groups]);
+  // Badges each video carries: every group its channel belongs to.
+  const channelBadges = useMemo(() => {
+    const by = new Map<string, GroupBadge[]>();
+    for (const g of state?.groups ?? []) {
+      for (const c of g.channelIds) by.set(c, [...(by.get(c) ?? []), badges.get(g.id)!]);
+    }
+    return by;
+  }, [state?.groups, badges]);
+  // Each group has its own Watch later shelf; LATER on a cartridge files it on the current one.
+  const shelf = activeGroup ? activeGroup.id : ALL_SHELF;
+  const shelves = useMemo(() => {
+    const by = new Map<string, LaterItem[]>();
+    for (const v of [...(state?.later ?? [])].sort((a, b) => a.addedAt - b.addedAt)) {
+      by.set(v.shelf, [...(by.get(v.shelf) ?? []), v]);
+    }
+    return by;
+  }, [state?.later]);
+  const later = shelves.get(shelf) ?? [];
+  const laterIds = useMemo(() => new Set(later.map((v) => v.id)), [later]);
+  // On ALL, every group's non-empty shelf is on display too, after ALL's own (shown if filled, or if nothing is).
+  const groupShelves = activeGroup
+    ? []
+    : (state?.groups ?? []).filter((g) => shelves.get(g.id)?.length).map((g) => ({ id: g.id, name: g.name }));
+  const visibleShelves = activeGroup
+    ? [{ id: shelf, name: activeGroup.name }]
+    : shelves.get(ALL_SHELF)?.length || groupShelves.length === 0
+      ? [{ id: ALL_SHELF, name: "All" }, ...groupShelves]
+      : groupShelves;
   const feed = useMemo(() => {
     if (!state) return [];
     const members = activeGroup ? new Set(activeGroup.channelIds) : null;
@@ -140,36 +170,64 @@ export default function App() {
   }
 
   function toggleLater(v: Video) {
-    if (laterIds.has(v.id)) return removeLater([v.id]);
-    setState((s) => s && { ...s, later: [...s.later, { ...v, addedAt: Date.now() }] });
-    sync(api("/api/later", "POST", { action: "add", videos: [v] }));
+    if (laterIds.has(v.id)) return removeLater(shelf, [v.id]);
+    setState((s) => s && { ...s, later: [...s.later, { ...v, shelf, addedAt: Date.now() }] });
+    sync(api("/api/later", "POST", { action: "add", shelf, videos: [v] }));
   }
 
-  function removeLater(ids: string[]) {
-    setState((s) => s && { ...s, later: s.later.filter((v) => !ids.includes(v.id)) });
-    sync(api("/api/later", "POST", { action: "remove", ids }));
+  function removeLater(shelf: string, ids: string[]) {
+    setState((s) => s && { ...s, later: s.later.filter((v) => v.shelf !== shelf || !ids.includes(v.id)) });
+    sync(api("/api/later", "POST", { action: "remove", shelf, ids }));
   }
 
-  function laterToNow(id: string) {
-    const v = state?.later.find((x) => x.id === id);
+  function laterToNow(shelf: string, id: string) {
+    const v = shelves.get(shelf)?.find((x) => x.id === id);
     if (!v) return;
     setQueue((q) => (q.some((x) => x.id === id) ? q : [...q, v]));
-    removeLater([id]);
+    removeLater(shelf, [id]);
   }
 
-  function reorder(list: "queue" | "later", ids: string[]) {
-    if (list === "queue") {
-      setQueue((q) => ids.map((id) => q.find((v) => v.id === id)!).filter(Boolean));
-      return;
-    }
-    setState((s) => s && { ...s, later: ids.map((id) => s.later.find((v) => v.id === id)!).filter(Boolean) });
-    sync(api("/api/later", "POST", { action: "reorder", ids }));
+  function reorderQueue(ids: string[]) {
+    setQueue((q) => ids.map((id) => q.find((v) => v.id === id)!).filter(Boolean));
+  }
+
+  function reorderLater(shelf: string, ids: string[]) {
+    // Restamp this shelf's items in the new order; other shelves are untouched.
+    const base = Date.now();
+    setState(
+      (s) =>
+        s && {
+          ...s,
+          later: s.later.map((v) => (v.shelf === shelf && ids.includes(v.id) ? { ...v, addedAt: base + ids.indexOf(v.id) } : v)),
+        },
+    );
+    sync(api("/api/later", "POST", { action: "reorder", shelf, ids }));
   }
 
   function saveGroups(groups: Group[]) {
     setState((s) => s && { ...s, groups });
     sync(api("/api/groups", "PUT", { groups }));
   }
+  // Each group has its own Watch later shelf; LATER on a cartridge files it on the current one.
+  const shelf = activeGroup ? activeGroup.id : ALL_SHELF;
+  const shelves = useMemo(() => {
+    const by = new Map<string, LaterItem[]>();
+    for (const v of [...(state?.later ?? [])].sort((a, b) => a.addedAt - b.addedAt)) {
+      by.set(v.shelf, [...(by.get(v.shelf) ?? []), v]);
+    }
+    return by;
+  }, [state?.later]);
+  const later = shelves.get(shelf) ?? [];
+  const laterIds = useMemo(() => new Set(later.map((v) => v.id)), [later]);
+  // On ALL, every group's non-empty shelf is on display too, after ALL's own (shown if filled, or if nothing is).
+  const groupShelves = activeGroup
+    ? []
+    : (state?.groups ?? []).filter((g) => shelves.get(g.id)?.length).map((g) => ({ id: g.id, name: g.name }));
+  const visibleShelves = activeGroup
+    ? [{ id: shelf, name: activeGroup.name }]
+    : shelves.get(ALL_SHELF)?.length || groupShelves.length === 0
+      ? [{ id: ALL_SHELF, name: "All" }, ...groupShelves]
+      : groupShelves;
 
   function setChannelInGroup(channelId: string, gid: string, on: boolean) {
     if (!state) return;
@@ -184,27 +242,16 @@ export default function App() {
 
   function createGroupWithChannel(name: string, channelId: string) {
     if (!state) return;
-    saveGroups([...state.groups, { id: crypto.randomUUID(), name, channelIds: [channelId], rules: {} }]);
+    saveGroups([...state.groups, { id: crypto.randomUUID(), name, channelIds: [channelId], rules: {}, color: nextGroupColor(state.groups) }]);
   }
 
   function createGroup(name: string) {
     if (!state) return;
     const id = crypto.randomUUID();
-  function createGroup(name: string) {
-    if (!state) return;
-    const id = crypto.randomUUID();
-    saveGroups([...state.groups, { id, name, channelIds: [], rules: {} }]);
+    saveGroups([...state.groups, { id, name, channelIds: [], rules: {}, color: nextGroupColor(state.groups) }]);
     setGroupId(id);
   }
 
-  function createGroup(name: string) {
-    if (!state) return;
-    const id = crypto.randomUUID();
-    saveGroups([...state.groups, { id, name, channelIds: [], rules: {} }]);
-    setGroupId(id);
-  }
-
-  const later = state?.later ?? [];
   const cols = SIZE_COLUMNS[size];
 
   return (

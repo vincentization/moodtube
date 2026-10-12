@@ -17,6 +17,6 @@ export const K = {
   groups: "mt:groups", // JSON Group[]
   videos: "mt:videos", // hash channelId -> Video[]
   watched: "mt:watched", // set of videoIds
-  later: "mt:later", // hash videoId -> LaterItem
+  later: "mt:later", // hash "shelf|videoId" -> LaterItem
   lastRefresh: "mt:lastRefresh", // epoch ms
 };

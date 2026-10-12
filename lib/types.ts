@@ -18,7 +18,10 @@ export type Video = {
   isShort: boolean;
 };
 
-export type LaterItem = Video & { addedAt: number };
+// A shelf is the group the video was saved from ("all" when no group was selected).
+export type LaterItem = Video & { addedAt: number; shelf: string };
+
+export const ALL_SHELF = "all";
 
 export type AppState = {
   channels: Channel[];
