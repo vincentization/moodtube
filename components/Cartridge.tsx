@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ageShort, durLabel, isRecent, thumbUrl } from "@/lib/format";
+import { ageShort, durLabel, thumbUrl } from "@/lib/format";
 import type { GroupBadge } from "@/lib/groups";
 import type { Group, Video } from "@/lib/types";
 import Badge from "./Badge";
@@ -11,7 +11,6 @@ type Props = {
   num: number;
   inQueue: boolean;
   inLater: boolean;
-  watched: boolean;
   groups: Group[];
   badges: GroupBadge[];
   onQueue: () => void;
@@ -76,7 +75,6 @@ export default function Cartridge(p: Props) {
             <div className="thumb">
               <img src={thumbUrl(p.video.id)} alt="" loading="lazy" />
               <span className="dur mono">{durLabel(p.video.duration)}</span>
-              {isRecent(p.video.published) && !p.watched && <span className="new">NEW</span>}
             </div>
             <div className="label-text">
               <span className="title2" title={p.video.title}>

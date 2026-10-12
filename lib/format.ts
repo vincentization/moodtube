@@ -44,12 +44,6 @@ export function ageShort(iso: string): string {
   return months < 12 ? `${months}MO` : `${Math.round(days / 365)}Y`;
 }
 
-const NEW_MS = 24 * 60 * 60 * 1000;
-
-export function isRecent(iso: string): boolean {
-  return Date.now() - new Date(iso).getTime() < NEW_MS;
-}
-
 export function thumbUrl(id: string): string {
   return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 }
