@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ageShort, durLabel, thumbUrl } from "@/lib/format";
+import { durLabel, thumbUrl } from "@/lib/format";
 import type { GroupBadge } from "@/lib/groups";
 import type { Group, Video } from "@/lib/types";
-import Badge from "./Badge";
+import Badge, { TapeBand } from "./Badge";
 
 type Props = {
   video: Video;
@@ -20,6 +20,9 @@ type Props = {
   onGroupLater: (groupId: string) => void;
   onToggleGroup: (groupId: string, on: boolean) => void;
   onCreateGroup: (name: string) => void;
+  // Opens the channel's page; left out on that page itself.
+  onChannel?: () => void;
+  watched?: boolean;
 };
 
 // Hovering shows the keys; touch screens have no hover, so a tap shows them and a
@@ -48,7 +51,7 @@ export default function Cartridge(p: Props) {
   return (
     <div
       ref={ref}
-      className={`cart${active ? " active" : ""}`}
+      className={`cart${active ? " active" : ""}${p.watched ? " seen" : ""}`}
       onMouseEnter={() => canHover() && setActive(true)}
       onMouseLeave={() => {
         if (!canHover()) return;
@@ -62,13 +65,6 @@ export default function Cartridge(p: Props) {
       }}
     >
       <div className="face front">
-        {p.badges.length > 0 && (
-          <span className="badges">
-            {p.badges.map((b) => (
-              <Badge key={b.id} group={b} />
-            ))}
-          </span>
-        )}
         <div className="ridges">
           <span />
           <span />
@@ -77,14 +73,14 @@ export default function Cartridge(p: Props) {
           <div className="label">
             <div className="thumb">
               <img src={thumbUrl(p.video.id)} alt="" loading="lazy" />
-              <span className="dur mono">{durLabel(p.video.duration)}</span>
             </div>
-            <div className="label-text">
-              <span className="title2" title={p.video.title}>
+            <div className="vhs">
+              <TapeBand badges={p.badges} className="vhs-band">
+                <span className="vhs-chan">{p.video.channelTitle}</span>
+                <span className="tape-time mono">{durLabel(p.video.duration)}</span>
+              </TapeBand>
+              <span className="vhs-title" title={p.video.title}>
                 {p.video.title}
-              </span>
-              <span className="meta">
-                {p.video.channelTitle.toUpperCase()} · {ageShort(p.video.published)} AGO
               </span>
             </div>
           </div>
@@ -119,6 +115,14 @@ export default function Cartridge(p: Props) {
               <button className={`rkey more${menu ? " on" : ""}`} onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Groups" title="Groups">
                 ⋮
               </button>
+              {p.onChannel && (
+                <button className="rkey" onClick={p.onChannel} title={`All videos from ${p.video.channelTitle}`} aria-label={`Open ${p.video.channelTitle}`}>
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                    <rect x="1.5" y="5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M5 1.5 8 5l3-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         )}

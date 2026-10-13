@@ -51,12 +51,14 @@ type Props = {
   watched: Set<string>;
   width: number;
   onWidth: (width: number) => void;
+  commentsOpen: boolean;
+  onComments: () => void;
   onSelect: (id: string | null) => void;
   onPlaying: (playing: boolean) => void;
   onFinished: (id: string) => void;
 };
 
-export default function Deck({ queue, currentId, playing, watched, width, onWidth, onSelect, onPlaying, onFinished }: Props) {
+export default function Deck({ queue, currentId, playing, watched, width, onWidth, commentsOpen, onComments, onSelect, onPlaying, onFinished }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);
@@ -197,8 +199,11 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
     const grip = e.currentTarget;
     grip.setPointerCapture(e.pointerId);
     const body = grip.closest(".body");
-    // Widest CRT that still leaves the tray (200), gaps (2×22), padding (2×28), the cable gutter (20) and a minimum feed.
-    const max = Math.max(MIN_WIDTH, (body?.clientWidth ?? window.innerWidth) - 200 - 44 - 56 - 20 - MIN_FEED);
+    // Widest CRT that still leaves the tray (200), gaps (2×22), padding (2×28), the cable gutter (20), a minimum feed
+    // and, when it's open, the comments panel plus its gap.
+    const comments = body?.querySelector<HTMLElement>(".comments")?.offsetWidth;
+    const room = (body?.clientWidth ?? window.innerWidth) - 200 - 44 - 56 - 20 - MIN_FEED - (comments ? comments + 22 : 0);
+    const max = Math.max(MIN_WIDTH, room);
     const start = { x: e.clientX, y: e.clientY, width };
     setResizing(true);
     document.documentElement.classList.add("resizing");
@@ -271,6 +276,12 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
           <button className="tbtn" onClick={next}>
             <span className="glyph">▸▸</span>
             <span className="word">NEXT</span>
+          </button>
+          <button className={`tbtn talk${commentsOpen ? " on" : ""}`} onClick={onComments} aria-pressed={commentsOpen} title={commentsOpen ? "Hide comments" : "Show comments"}>
+            <span className="glyph">
+              <span className="hled" />
+            </span>
+            <span className="word">COMMENTS</span>
           </button>
         </div>
       </div>

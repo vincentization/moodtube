@@ -3,7 +3,7 @@
 import { durLabel, totalLabel } from "@/lib/format";
 import type { GroupBadge } from "@/lib/groups";
 import type { Video } from "@/lib/types";
-import Badge from "./Badge";
+import Badge, { TapeLabel } from "./Badge";
 import { FoldKey, SourceKey } from "./Stack";
 import { useReorder } from "./useReorder";
 
@@ -11,6 +11,7 @@ type Props = {
   id: string;
   name: string;
   badge?: GroupBadge; // absent for the ALL shelf
+  channelBadges: Map<string, GroupBadge[]>; // labels on the ALL shelf carry the channel's groups
   later: Video[];
   currentId: string | null; // null unless this shelf is the active source
   active: boolean;
@@ -21,7 +22,6 @@ type Props = {
   onPlay: (id: string) => void;
   onReorder: (ids: string[]) => void;
   onRemove: (id: string) => void;
-  onToNow: (id: string) => void;
 };
 
 // Watch later for a group: tapes lying on a wooden shelf. Patch the CRT into it to play straight off the shelf.
@@ -62,18 +62,15 @@ export default function Shelf(p: Props) {
                   onClick={() => p.onPlay(v.id)}
                   title={`Play ${v.title}`}
                 >
-                  <span className="spine-title" title={v.title}>
-                    {v.title}
-                  </span>
-                  <span className="spine-meta mono">
-                    {v.channelTitle} · {durLabel(v.duration)}
-                  </span>
+                  <TapeLabel
+                    badges={p.badge ? [p.badge] : (p.channelBadges.get(v.channelId) ?? [])}
+                    title={v.title}
+                    channel={v.channelTitle}
+                    duration={durLabel(v.duration)}
+                  />
                 </button>
-                <button className="okey" onClick={() => p.onToNow(v.id)} title="Move to Watch now">
-                  NOW
-                </button>
-                <button className="ckey eject" onClick={() => p.onRemove(v.id)} title="Take off the shelf">
-                  ✕
+                <button className="ckey eject" onClick={() => p.onRemove(v.id)} title="Eject">
+                  ⏏
                 </button>
               </div>
             </div>

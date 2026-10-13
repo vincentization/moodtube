@@ -1,7 +1,9 @@
 "use client";
 
 import { durLabel, totalLabel } from "@/lib/format";
+import type { GroupBadge } from "@/lib/groups";
 import type { Video } from "@/lib/types";
+import { TapeLabel } from "./Badge";
 import { useReorder } from "./useReorder";
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
   onFold: () => void;
   playing: boolean;
   watched: Set<string>;
+  channelBadges: Map<string, GroupBadge[]>;
   onSource: () => void;
   onPlay: (id: string) => void;
   onReorder: (ids: string[]) => void;
@@ -90,11 +93,12 @@ export default function Stack(p: Props) {
                   </span>
                   <span className="mini-num mono">{String(i + 1).padStart(2, "0")}</span>
                   <button className={`mini-label${playing ? " playing" : ""}`} onClick={() => p.onPlay(v.id)} title={`Play ${v.title}`}>
-                    <span className="mini-title">
-                      {seen && "✓ "}
-                      {v.title}
-                    </span>
-                    <span className="mini-dur mono">{durLabel(v.duration)}</span>
+                    <TapeLabel
+                      badges={p.channelBadges.get(v.channelId) ?? []}
+                      title={seen ? `✓ ${v.title}` : v.title}
+                      channel={v.channelTitle}
+                      duration={durLabel(v.duration)}
+                    />
                   </button>
                   <button className="ckey eject" onClick={() => p.onEject(v.id)} title="Eject">
                     ⏏

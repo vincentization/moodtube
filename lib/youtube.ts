@@ -95,3 +95,73 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) =>
   await Promise.all(workers);
   return results;
 }
+
+export type Comment = {
+  id: string;
+  author: string;
+  avatar: string;
+  text: string;
+  likes: number;
+  replies: number;
+  published: string;
+};
+
+export type CommentPage = { comments: Comment[]; next: string | null; disabled: boolean };
+
+type ThreadItem = {
+  id: string;
+  snippet: {
+    totalReplyCount: number;
+    topLevelComment: {
+      snippet: {
+        authorDisplayName: string;
+        authorProfileImageUrl: string;
+        textOriginal: string;
+        likeCount: number;
+        publishedAt: string;
+      };
+    };
+  };
+};
+
+// commentThreads.list costs 1 quota unit per page of up to 100 threads.
+export async function fetchComments(videoId: string, pageToken?: string): Promise<CommentPage> {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) throw new Error("YOUTUBE_API_KEY is not set");
+  const params = new URLSearchParams({
+    part: "snippet",
+    videoId,
+    order: "relevance",
+    maxResults: "25",
+    textFormat: "plainText",
+    key,
+  });
+  if (pageToken) params.set("pageToken", pageToken);
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?${params}`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    if (res.status === 403 && body.includes("commentsDisabled")) return { comments: [], next: null, disabled: true };
+    console.error("commentThreads.list failed", res.status, body);
+    throw new Error(`YouTube ${res.status}`);
+  }
+  const data = (await res.json()) as { items?: ThreadItem[]; nextPageToken?: string };
+  return {
+    comments: (data.items ?? []).map((t) => {
+      const s = t.snippet.topLevelComment.snippet;
+      return {
+        id: t.id,
+        author: s.authorDisplayName,
+        avatar: s.authorProfileImageUrl,
+        text: s.textOriginal,
+        likes: s.likeCount,
+        replies: t.snippet.totalReplyCount,
+        published: s.publishedAt,
+      };
+    }),
+    next: data.nextPageToken ?? null,
+    disabled: false,
+  };
+}

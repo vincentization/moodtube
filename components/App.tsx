@@ -5,7 +5,9 @@ import { api, load, save } from "@/lib/client";
 import { matchesRules } from "@/lib/format";
 import { groupBadges, nextGroupColor, type GroupBadge } from "@/lib/groups";
 import { ALL_SHELF, type AppState, type Group, type LaterItem, type Video } from "@/lib/types";
+import Badge from "./Badge";
 import Cartridge from "./Cartridge";
+import Comments from "./Comments";
 import ChannelSelect, { SIZE_COLUMNS, type ThumbSize } from "./ChannelSelect";
 import Cable from "./Cable";
 import Deck from "./Deck";
@@ -34,6 +36,11 @@ export default function App() {
   // Where each source was when the cable was patched elsewhere, so it resumes there.
   const positions = useRef<Record<string, string | null>>({});
   const [playing, setPlaying] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  // The channel page shown in the feed column (?channel=…), or null for the regular feed.
+  const [channelId, setChannelId] = useState<string | null>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const feedScroll = useRef(0);
   const [limit, setLimit] = useState(PAGE);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
@@ -68,6 +75,7 @@ export default function App() {
     setSideWidth(load("mt:sideWidth", SIDE_DEFAULT));
     setGroupId(load("mt:group", "all"));
     setFolded(load("mt:folded", []));
+    setCommentsOpen(load("mt:comments", false));
     restored.current = true;
     loadState()
       .then((s) => {
@@ -86,6 +94,41 @@ export default function App() {
     save("mt:sideWidth", sideWidth);
     save("mt:folded", folded);
   }, [queue, hideWatched, hideShorts, size, groupId, sideWidth, folded]);
+
+  const toggleComments = (open: boolean) => {
+    setCommentsOpen(open);
+    save("mt:comments", open);
+  };
+
+  // The channel page lives in the URL so the browser's back button closes it too; the CRT keeps playing either way.
+  useEffect(() => {
+    const read = () => setChannelId(new URLSearchParams(window.location.search).get("channel"));
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+
+  // Entering a channel starts at the top; leaving it puts the feed back where it was.
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = channelId ? 0 : feedScroll.current;
+  }, [channelId]);
+
+  function openChannel(id: string) {
+    if (!channelId) feedScroll.current = feedRef.current?.scrollTop ?? 0;
+    window.history.pushState({ channel: id }, "", `?channel=${encodeURIComponent(id)}`);
+    setChannelId(id);
+  }
+
+  function closeChannel() {
+    if (!channelId) return;
+    // Opened from the feed: step back through history. Landed here directly: just drop the param.
+    if (window.history.state?.channel) window.history.back();
+    else {
+      window.history.replaceState(null, "", window.location.pathname);
+      setChannelId(null);
+    }
+  }
 
   const toggleFold = (id: string) => setFolded((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
@@ -129,6 +172,7 @@ export default function App() {
       ? shownShelves
       : [...shownShelves, { id: source, name: source === ALL_SHELF ? "All" : (sourceGroup?.name ?? "") }];
   const sourceList = source ? (shelves.get(source) ?? []) : queue;
+  const current = currentId ? sourceList.find((v) => v.id === currentId) : undefined;
 
   // A shelf is the source only while something from it is loaded; when it runs out (or its group is
   // deleted) the cable unplugs and Watch now is the default again.
@@ -152,6 +196,10 @@ export default function App() {
   }, [state, activeGroup, hideWatched, hideShorts, watched]);
 
   useEffect(() => setLimit(PAGE), [groupId, hideWatched, hideShorts]);
+
+  const channel = channelId ? (state?.channels.find((c) => c.id === channelId) ?? null) : null;
+  // Everything stored for the channel, newest first, regardless of group or hide toggles.
+  const channelVideos = useMemo(() => (channelId ? (state?.videos ?? []).filter((v) => v.channelId === channelId) : []), [state?.videos, channelId]);
 
   // Load more cartridges as the end of the rack scrolls into view.
   useEffect(() => {
@@ -238,13 +286,6 @@ export default function App() {
     sync(api("/api/later", "POST", { action: "remove", shelf, ids }));
   }
 
-  function laterToNow(shelf: string, id: string) {
-    const v = shelves.get(shelf)?.find((x) => x.id === id);
-    if (!v) return;
-    setQueue((q) => (q.some((x) => x.id === id) ? q : [...q, v]));
-    removeLater(shelf, [id]);
-  }
-
   function reorderQueue(ids: string[]) {
     setQueue((q) => ids.map((id) => q.find((v) => v.id === id)!).filter(Boolean));
   }
@@ -298,16 +339,43 @@ export default function App() {
 
   const cols = SIZE_COLUMNS[size];
 
+  function cartridge(v: Video, i: number, linkChannel: boolean) {
+    return (
+      <Cartridge
+        key={v.id}
+        video={v}
+        num={i + 1}
+        inQueue={queueIds.has(v.id)}
+        inLater={laterIds.has(v.id)}
+        groupLater={
+          activeGroup ? [] : (channelBadges.get(v.channelId) ?? []).map((b) => ({ badge: b, on: !!shelfIds.get(b.id)?.has(v.id) }))
+        }
+        groups={state?.groups ?? []}
+        badges={channelBadges.get(v.channelId) ?? []}
+        watched={!linkChannel && watched.has(v.id)}
+        onQueue={() => toggleQueue(v)}
+        onLater={() => toggleLater(v)}
+        onGroupLater={(gid) => toggleLater(v, gid)}
+        onToggleGroup={(gid, on) => setChannelInGroup(v.channelId, gid, on)}
+        onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
+        onChannel={linkChannel ? () => openChannel(v.channelId) : undefined}
+      />
+    );
+  }
+
   return (
     <div className="page">
       <div className="console">
         <Header page="feed" refreshing={refreshing} onRefresh={refresh} />
-        <div className="body" style={{ "--crt": `${sideWidth}px` } as React.CSSProperties}>
+        <div className={`body${commentsOpen ? " with-comments" : ""}`} style={{ "--crt": `${sideWidth}px` } as React.CSSProperties}>
           <ChannelSelect
             groups={state?.groups ?? []}
             badges={badges}
             groupId={activeGroup ? groupId : "all"}
-            onGroup={setGroupId}
+            onGroup={(id) => {
+              closeChannel();
+              setGroupId(id);
+            }}
             onAddGroup={createGroup}
             hideWatched={hideWatched}
             onHideWatched={setHideWatched}
@@ -318,41 +386,54 @@ export default function App() {
             status={status}
           />
 
-          <div className="feed">
-            {!state ? (
-              !status && <div className="empty">Loading…</div>
-            ) : state.channels.length === 0 ? (
-              <div className="empty">No channels yet — import your subscriptions on the Channels page.</div>
-            ) : feed.length === 0 ? (
-              <div className="empty">
-                {state.videos.length === 0 ? "No videos yet — press Refresh." : "Nothing here matches this channel's filters."}
-              </div>
+          <div ref={feedRef} className="feed">
+            {channelId ? (
+              <>
+                <div className="chan-bar">
+                  <button className="ckey chan-back" onClick={closeChannel}>
+                    ◂ BACK
+                  </button>
+                  <div className="chan-plate">
+                    <span className="chan-name">{channel?.title ?? channelVideos[0]?.channelTitle ?? "Channel"}</span>
+                    <span className="chan-sub mono">
+                      {channelVideos.length} RECENT {channelVideos.length === 1 ? "VIDEO" : "VIDEOS"}
+                    </span>
+                  </div>
+                  {(channelBadges.get(channelId) ?? []).map((b) => (
+                    <Badge key={b.id} group={b} />
+                  ))}
+                  <a className="ckey chan-yt" href={`https://www.youtube.com/channel/${channelId}/videos`} target="_blank" rel="noreferrer">
+                    YOUTUBE ↗
+                  </a>
+                </div>
+                {!state ? (
+                  <div className="empty">Loading…</div>
+                ) : channelVideos.length === 0 ? (
+                  <div className="empty">No videos stored for this channel yet — press Refresh.</div>
+                ) : (
+                  <div className="rack" style={{ "--cols": cols } as React.CSSProperties}>
+                    {channelVideos.map((v, i) => cartridge(v, i, false))}
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="rack" style={{ "--cols": cols } as React.CSSProperties}>
-                {feed.slice(0, limit).map((v, i) => (
-                  <Cartridge
-                    key={v.id}
-                    video={v}
-                    num={i + 1}
-                    inQueue={queueIds.has(v.id)}
-                    inLater={laterIds.has(v.id)}
-                    groupLater={
-                      activeGroup
-                        ? []
-                        : (channelBadges.get(v.channelId) ?? []).map((b) => ({ badge: b, on: !!shelfIds.get(b.id)?.has(v.id) }))
-                    }
-                    groups={state.groups}
-                    badges={channelBadges.get(v.channelId) ?? []}
-                    onQueue={() => toggleQueue(v)}
-                    onLater={() => toggleLater(v)}
-                    onGroupLater={(gid) => toggleLater(v, gid)}
-                    onToggleGroup={(gid, on) => setChannelInGroup(v.channelId, gid, on)}
-                    onCreateGroup={(name) => createGroupWithChannel(name, v.channelId)}
-                  />
-                ))}
-              </div>
+              <>
+                {!state ? (
+                  !status && <div className="empty">Loading…</div>
+                ) : state.channels.length === 0 ? (
+                  <div className="empty">No channels yet — import your subscriptions on the Channels page.</div>
+                ) : feed.length === 0 ? (
+                  <div className="empty">
+                    {state.videos.length === 0 ? "No videos yet — press Refresh." : "Nothing here matches this channel's filters."}
+                  </div>
+                ) : (
+                  <div className="rack" style={{ "--cols": cols } as React.CSSProperties}>
+                    {feed.slice(0, limit).map((v, i) => cartridge(v, i, true))}
+                  </div>
+                )}
+                {feed.length > limit && <div ref={sentinel} style={{ height: 1 }} />}
+              </>
             )}
-            {feed.length > limit && <div ref={sentinel} style={{ height: 1 }} />}
           </div>
 
           <div className="side">
@@ -363,6 +444,8 @@ export default function App() {
               watched={watched}
               width={sideWidth}
               onWidth={setSideWidth}
+              commentsOpen={commentsOpen}
+              onComments={() => toggleComments(!commentsOpen)}
               onSelect={setCurrentId}
               onPlaying={setPlaying}
               onFinished={(id) => setWatched([id], true)}
@@ -377,6 +460,7 @@ export default function App() {
               onFold={() => toggleFold(NOW)}
               playing={playing}
               watched={watched}
+              channelBadges={channelBadges}
               onSource={() => pressSource(null)}
               onPlay={(id) => playFrom(null, id)}
               onReorder={reorderQueue}
@@ -389,6 +473,7 @@ export default function App() {
                 id={sh.id}
                 name={sh.name}
                 badge={badges.get(sh.id)}
+                channelBadges={channelBadges}
                 later={shelves.get(sh.id) ?? []}
                 currentId={source === sh.id ? currentId : null}
                 active={source === sh.id}
@@ -399,10 +484,13 @@ export default function App() {
                 onPlay={(id) => playFrom(sh.id, id)}
                 onReorder={(ids) => reorderLater(sh.id, ids)}
                 onRemove={(id) => removeLater(sh.id, [id])}
-                onToNow={(id) => laterToNow(sh.id, id)}
               />
             ))}
           </div>
+
+          {commentsOpen && (
+            <Comments videoId={currentId} title={current?.title ?? null} onClose={() => toggleComments(false)} />
+          )}
         </div>
       </div>
     </div>

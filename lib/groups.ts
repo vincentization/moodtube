@@ -40,3 +40,4 @@ export function groupBadges(groups: Group[]): Map<string, GroupBadge> {
   }
   return out;
 }
+
