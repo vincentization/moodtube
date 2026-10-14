@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { watchUrl } from "@/lib/format";
+import * as sfx from "@/lib/sfx";
+import CrtHull, { type HullKey } from "./CrtHull";
 import type { Video } from "@/lib/types";
 
 type YTPlayer = {
@@ -66,6 +68,11 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const bezelRef = useRef<HTMLDivElement>(null);
+  const [has3d, setHas3d] = useState(false);
+  const [pressed, setPressed] = useState<string | null>(null);
+  // Whether the key held down was latched when it went down; Enter clicks on keydown, so it can't be read on release.
+  const wasLatched = useRef(false);
 
   const index = currentId ? queue.findIndex((v) => v.id === currentId) : -1;
   const current = index >= 0 ? queue[index] : null;
@@ -227,10 +234,66 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
   }
 
   const isPlaying = playing && !!currentId;
+  const power = !!currentId;
+
+  // Tube warm-up sound when the set comes on; not on first render, where nothing was pressed.
+  const wasPowered = useRef(power);
+  const [tube, setTube] = useState<"idle" | "on" | "off">("idle");
+  useEffect(() => {
+    if (wasPowered.current === power) return;
+    wasPowered.current = power;
+    setTube(power ? "on" : "off");
+    if (power) sfx.powerOn();
+  }, [power]);
+
+  // PLAY is a latching key (it stays down while playing); PREV and NEXT spring back; COMMENTS is a toggle switch.
+  const latched: Record<string, boolean> = { play: isPlaying, comments: commentsOpen };
+  const hullKeys = useMemo<HullKey[]>(() => {
+    const state = (id: string, latch = false) => (pressed === id ? "down" : latch ? "latched" : "up");
+    return [
+      { id: "prev", glyph: "prev", word: "PREV", state: state("prev") },
+      { id: "play", glyph: isPlaying ? "pause" : "play", word: isPlaying ? "PAUSE" : "PLAY", amber: true, state: state("play", isPlaying) },
+      { id: "next", glyph: "next", word: "NEXT", state: state("next") },
+      { id: "comments", glyph: "led", word: "COMMENTS", toggle: true, lit: commentsOpen, state: state("comments") },
+    ];
+  }, [pressed, isPlaying, commentsOpen]);
+
+  // Pointer and keyboard both drive the key down and up; the click itself still does the action.
+  function mech(id: string) {
+    const kind: sfx.KeyKind = id === "comments" ? "toggle" : id in latched ? "latch" : "momentary";
+    const down = () => {
+      wasLatched.current = !!latched[id];
+      setPressed(id);
+      sfx.keyDown(kind);
+    };
+    const up = () => {
+      setPressed((p) => (p === id ? null : p));
+      if (kind === "toggle") sfx.toggle(!wasLatched.current);
+      else if (kind === "momentary") sfx.keyUp();
+      else if (wasLatched.current) sfx.unlatch();
+      else sfx.latch();
+    };
+    return {
+      "data-key": id,
+      onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+        if (e.button !== 0) return;
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId); // so the key comes back up wherever the pointer is released
+        } catch {}
+        down();
+      },
+      onPointerUp: () => pressed === id && up(),
+      onPointerCancel: () => setPressed(null),
+      onKeyDown: (e: React.KeyboardEvent) => (e.key === " " || e.key === "Enter") && !e.repeat && down(),
+      onKeyUp: (e: React.KeyboardEvent) => (e.key === " " || e.key === "Enter") && pressed === id && up(),
+      onBlur: () => pressed === id && setPressed(null),
+    };
+  }
 
   return (
     <>
-      <div className="bezel">
+      <div ref={bezelRef} className={`bezel${has3d ? " has-3d" : ""}`}>
+        <CrtHull bezel={bezelRef} keys={hullKeys} power={power} onReady={setHas3d} />
         <span className="screw l" />
         <span className="screw r" />
         <span className="jack out" />
@@ -241,43 +304,49 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
           title="Drag to resize · double-click to reset"
         />
         <div className="screen">
-          <div ref={hostRef} className="screen-host" />
-          {(!currentId || error) && (
-            <div className="screen-text mono">
-              <span className="out">VIDEO OUT</span>
-              {error && current ? (
-                <>
-                  <span className="np">CAN&apos;T PLAY HERE</span>
-                  <span className="acts">
-                    <a className="ckey" href={watchUrl(current.id)} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
-                      OPEN ON YOUTUBE
-                    </a>
-                    <button className="ckey" onClick={next}>
-                      SKIP
-                    </button>
-                  </span>
-                </>
-              ) : (
-                <span className="np">{startItem ? startItem.title.toUpperCase() : "NO SIGNAL"}</span>
-              )}
-            </div>
-          )}
+          <div className="tube" data-power={tube}>
+            <div ref={hostRef} className="screen-host" />
+            {(!currentId || error) && (
+              <div className="screen-text mono">
+                <span className="out">VIDEO OUT</span>
+                {error && current ? (
+                  <>
+                    <span className="np">CAN&apos;T PLAY HERE</span>
+                    <span className="acts">
+                      <a className="ckey" href={watchUrl(current.id)} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+                        OPEN ON YOUTUBE
+                      </a>
+                      <button className="ckey" onClick={next}>
+                        SKIP
+                      </button>
+                    </span>
+                  </>
+                ) : (
+                  <span className="np">{startItem ? startItem.title.toUpperCase() : "NO SIGNAL"}</span>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Tube layers over the picture; none of them take the pointer, so the player stays usable. */}
+          <div className="crt-scan" />
+          <div className="crt-roll" />
+          <div className="crt-vignette" />
           <div className="glare" />
         </div>
         <div className="transport">
-          <button className="tbtn" onClick={prev}>
+          <button className="tbtn" onClick={prev} aria-label="Previous" {...mech("prev")}>
             <span className="glyph">◂◂</span>
             <span className="word">PREV</span>
           </button>
-          <button className="tbtn play" onClick={togglePlay}>
+          <button className="tbtn play" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"} {...mech("play")}>
             <span className="glyph">{isPlaying ? "❚❚" : "▶"}</span>
             <span className="word">{isPlaying ? "PAUSE" : "PLAY"}</span>
           </button>
-          <button className="tbtn" onClick={next}>
+          <button className="tbtn" onClick={next} aria-label="Next" {...mech("next")}>
             <span className="glyph">▸▸</span>
             <span className="word">NEXT</span>
           </button>
-          <button className={`tbtn talk${commentsOpen ? " on" : ""}`} onClick={onComments} aria-pressed={commentsOpen} title={commentsOpen ? "Hide comments" : "Show comments"}>
+          <button className={`tbtn talk${commentsOpen ? " on" : ""}`} onClick={onComments} aria-pressed={commentsOpen} title={commentsOpen ? "Hide comments" : "Show comments"} {...mech("comments")}>
             <span className="glyph">
               <span className="hled" />
             </span>
