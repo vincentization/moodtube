@@ -503,7 +503,57 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 .screen-text .out { font-size: 16px; color: oklch(0.6 0.12 145); }
 .screen-text .np { font-size: 24px; line-height: 1.05; }
 .screen-text .acts { display: flex; gap: 8px; margin-top: 8px; text-shadow: none; }
-.glare { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 60% 40% at 25% 15%, rgba(255, 255, 255, 0.07), transparent 70%); }
+.tube { position: absolute; inset: 0; transform-origin: 50% 50%; }
+/* Power on: the beam opens as a bright line, then fills the height. Power off: collapses to a line, then a dot. */
+.tube[data-power="on"] { animation: crt-on 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.tube[data-power="off"] { animation: crt-off 0.7s ease-in both; }
+@keyframes crt-on {
+  0% { transform: scale(0.2, 0.004); filter: brightness(6) saturate(0); }
+  30% { transform: scale(1, 0.004); filter: brightness(5) saturate(0); }
+  65% { transform: scale(1, 1.03); filter: brightness(1.8); }
+  100% { transform: none; filter: none; }
+}
+@keyframes crt-off {
+  0% { transform: none; filter: none; opacity: 1; }
+  22% { transform: scale(1, 0.005); filter: brightness(5) saturate(0); }
+  40% { transform: scale(0.012, 0.005); filter: brightness(8) saturate(0); opacity: 1; }
+  58% { transform: scale(0.012, 0.005); opacity: 0; }
+  70% { transform: none; opacity: 0; filter: none; }
+  100% { opacity: 1; }
+}
+.crt-scan, .crt-roll, .crt-vignette, .glare { position: absolute; inset: 0; pointer-events: none; }
+/* Scanlines with a faint RGB aperture grille, flickering very slightly as the phosphor refreshes. */
+.crt-scan {
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255, 40, 40, 0.05) 0 1px, rgba(40, 255, 80, 0.04) 1px 2px, rgba(60, 90, 255, 0.05) 2px 3px);
+  mix-blend-mode: multiply;
+  animation: crt-flicker 0.12s steps(2) infinite;
+}
+@keyframes crt-flicker { 50% { opacity: 0.86; } }
+/* A soft brighter band drifting down the picture, like an unsynced refresh. */
+.crt-roll {
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.035) 45%, rgba(255, 255, 255, 0.05) 50%, transparent 58%);
+  background-size: 100% 300%;
+  animation: crt-roll 9s linear infinite;
+}
+@keyframes crt-roll { from { background-position: 0 100%; } to { background-position: 0 -200%; } }
+/* Curved faceplate: the picture falls off toward the corners. */
+.crt-vignette {
+  border-radius: inherit;
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 62%, rgba(0, 0, 0, 0.42) 100%);
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.75), inset 0 0 4px 1px rgba(0, 0, 0, 0.9);
+}
+/* Reflections on the convex glass: a broad window highlight top left and a thin streak along the top curve. */
+.glare {
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 55% 38% at 24% 14%, rgba(255, 255, 255, 0.1), transparent 70%),
+    radial-gradient(ellipse 90% 80% at 72% 90%, rgba(255, 255, 255, 0.025), transparent 60%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .crt-scan, .crt-roll, .tube[data-power] { animation: none; }
+}
 
 
 .transport { margin-top: 14px; display: grid; grid-template-columns: 1fr 1.4fr 1fr 1.1fr; gap: 8px; }
@@ -532,6 +582,30 @@ button.badge:disabled { cursor: default; opacity: 0.7; transform: none; }
 .tbtn .word { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
 .tbtn.talk .glyph { display: flex; align-items: center; height: 18px; }
 .tbtn.talk.on .hled { background: oklch(0.7 0.18 145); box-shadow: 0 0 7px oklch(0.7 0.18 145); }
+
+/* ---------- Three.js hull ----------
+   When WebGL is up, the canvas draws the cabinet, bezel and keys over the screen (transparent where the glass is),
+   and the DOM keys become invisible hit targets lying exactly on the drawn key faces. Without it, the CSS bezel above stays. */
+.crt-canvas { position: absolute; z-index: 1; pointer-events: none; }
+.bezel.has-3d {
+  background: transparent;
+  box-shadow: 0 18px 26px -10px rgba(40, 30, 10, 0.45);
+  margin-top: 20px;
+  padding: 24px 24px 26px;
+}
+.bezel.has-3d .screw { display: none; }
+/* Square keys packed tightly on the left like the TG 60's key block, the comments toggle switch on the right.
+   Each button is the hit target over what's drawn: a key's face, or the switch. */
+.bezel.has-3d .transport { margin-top: 26px; padding: 0 10px; gap: 3px; grid-template-columns: repeat(3, 52px) 1fr 48px; }
+.bezel.has-3d .tbtn { height: 44px; }
+.bezel.has-3d .tbtn.talk { grid-column: 5; }
+.bezel.has-3d .screen { box-shadow: none; }
+.bezel.has-3d .transport, .bezel.has-3d .resize-grip, .bezel.has-3d .jack { z-index: 2; }
+.bezel.has-3d .tbtn { position: relative; background: none; box-shadow: none; color: transparent; -webkit-tap-highlight-color: transparent; }
+.bezel.has-3d .tbtn > * { opacity: 0; }
+.bezel.has-3d .tbtn:active { transform: none; box-shadow: none; }
+.bezel.has-3d .tbtn:focus { outline: none; }
+.bezel.has-3d .tbtn:focus-visible { outline: 2px solid oklch(0.8 0.15 85); outline-offset: 4px; border-radius: 4px; }
 
 /* Comments panel: same dark housing as the stack, filling the column height; only the well scrolls. */
 .comments {
