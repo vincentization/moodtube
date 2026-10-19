@@ -1,4 +1,4 @@
-// Synthesized mechanical sounds for the CRT's Braun-style keys. Everything is built from filtered noise bursts
+// Synthesized mechanical sounds for the CRT's Braun-style keys and the tray's controls. Everything is built from filtered noise bursts
 // (plastic clacks, contact ticks), pitch-dropping sines (the key body bottoming out) and decaying partials
 // (the latch spring), so there are no audio files to load. The context is created on the first key press,
 // which is a user gesture, so browsers allow it to start.
@@ -30,10 +30,10 @@ function audio(): AudioContext | null {
 // ±amount random spread so repeated presses don't sound machine-identical.
 const vary = (v: number, amount = 0.08) => v * (1 + (Math.random() * 2 - 1) * amount);
 
-type Burst = { freq: number; q?: number; gain: number; decay: number; type?: BiquadFilterType };
+type Burst = { freq: number; q?: number; gain: number; decay: number; type?: BiquadFilterType; attack?: number };
 
 // A short shaped noise burst through a filter: the click/clack of plastic and metal contacts.
-function burst(c: AudioContext, t: number, { freq, q = 1, gain, decay, type = "bandpass" }: Burst) {
+function burst(c: AudioContext, t: number, { freq, q = 1, gain, decay, type = "bandpass", attack = 0.0015 }: Burst) {
   const src = c.createBufferSource();
   src.buffer = noiseBuf;
   src.playbackRate.value = vary(1, 0.2);
@@ -43,11 +43,11 @@ function burst(c: AudioContext, t: number, { freq, q = 1, gain, decay, type = "b
   f.Q.value = q;
   const g = c.createGain();
   g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(vary(gain, 0.12), t + 0.0015);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  g.gain.linearRampToValueAtTime(vary(gain, 0.12), t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   src.connect(f).connect(g).connect(out!);
   src.start(t, Math.random() * 0.5);
-  src.stop(t + decay + 0.02);
+  src.stop(t + attack + decay + 0.02);
 }
 
 type Tone = { from: number; to?: number; gain: number; decay: number; type?: OscillatorType };
@@ -138,4 +138,80 @@ export function powerOn() {
   tone(c, t + 0.02, { from: 60, gain: 0.12, decay: 0.7, type: "sawtooth" });
   tone(c, t + 0.02, { from: 120, gain: 0.05, decay: 0.5 });
   burst(c, t + 0.06, { freq: 3500, type: "highpass", gain: 0.06, decay: 0.45 });
+}
+
+// The tray's channel keys: an interlocking bank like a radio's band selector. The caps are big and the stroke long,
+// so everything sits lower and fuller than the transport keys.
+export function bankDown() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  burst(c, t, { freq: 2600, q: 2.5, gain: 0.7, decay: 0.012 });
+  burst(c, t, { freq: 7000, type: "highpass", gain: 0.2, decay: 0.004 });
+  tone(c, t, { from: 210, to: 130, gain: 0.22, decay: 0.035 });
+}
+
+// A bank key caught at the bottom: the catch engages, the latch bar slides over and the key that was down is thrown
+// back up against its top stop, the two-part "ka-chunk" of an interlocking bank.
+export function interlock() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  burst(c, t + 0.004, { freq: 5000, q: 7, gain: 0.45, decay: 0.008 });
+  burst(c, t + 0.012, { freq: 1800, q: 4, gain: 0.22, decay: 0.03 });
+  tone(c, t + 0.012, { from: 1750, to: 1660, gain: 0.025, decay: 0.08, type: "triangle" });
+  burst(c, t + 0.03, { freq: 3000, q: 2.5, gain: 0.65, decay: 0.012 });
+  tone(c, t + 0.03, { from: 240, to: 160, gain: 0.14, decay: 0.03 });
+}
+
+// The key that's already down pressed again: it bottoms out and the catch just re-seats.
+export function reseat() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  burst(c, t + 0.006, { freq: 4600, q: 6, gain: 0.25, decay: 0.006 });
+}
+
+// A non-latching bank key let go: the spring returns it with a lighter clack.
+export function bankUp() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  burst(c, t + 0.01, { freq: 3400, q: 3, gain: 0.45, decay: 0.008 });
+  tone(c, t + 0.01, { from: 260, to: 200, gain: 0.07, decay: 0.02 });
+}
+
+// Slide switch: the knob scrapes along its slot, then drops into the detent at the far end; a touch lower going off.
+export function slide(on: boolean) {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  const f = on ? 1 : 0.88;
+  burst(c, t, { freq: 1500 * f, q: 0.7, gain: 0.12, decay: 0.035, attack: 0.025 });
+  burst(c, t + 0.004, { freq: 6500, type: "highpass", gain: 0.04, decay: 0.04, attack: 0.02 });
+  burst(c, t + 0.045, { freq: 4200 * f, q: 4, gain: 0.6, decay: 0.007 });
+  burst(c, t + 0.045, { freq: 9000, type: "highpass", gain: 0.2, decay: 0.003 });
+  tone(c, t + 0.046, { from: 720 * f, to: 560 * f, gain: 0.05, decay: 0.03, type: "triangle" });
+}
+
+// Rotary selector passing detents: a crisp tick per notch as the ball drops into it, spaced like a quick turn.
+export function detent(notches = 1) {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  for (let i = 0; i < notches; i++) {
+    const ti = t + i * 0.055;
+    burst(c, ti, { freq: 5200, q: 5, gain: 0.5, decay: 0.005 });
+    burst(c, ti + 0.002, { freq: 2200, q: 2, gain: 0.2, decay: 0.012 });
+    tone(c, ti, { from: 420, to: 300, gain: 0.04, decay: 0.015 });
+  }
+}
+
+// Rotary selector turned against its end stop: a dull knock.
+export function endStop() {
+  const c = audio();
+  if (!c) return;
+  const t = c.currentTime;
+  burst(c, t, { freq: 900, q: 1.5, gain: 0.35, decay: 0.02 });
+  tone(c, t, { from: 180, to: 120, gain: 0.12, decay: 0.03 });
 }

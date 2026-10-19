@@ -1,9 +1,9 @@
 import type { GroupBadge } from "@/lib/groups";
 
-// Small colored tag naming a group, e.g. "WO" for Woodworking.
-export default function Badge({ group, className = "" }: { group: GroupBadge; className?: string }) {
+// Small colored tag naming a group, e.g. "WO" for Woodworking. `print` marks it to be printed onto a 3D key face.
+export default function Badge({ group, className = "", print }: { group: GroupBadge; className?: string; print?: boolean }) {
   return (
-    <span className={`gbadge mono ${className}`} style={{ "--badge": group.color } as React.CSSProperties} title={group.name}>
+    <span className={`gbadge mono ${className}`} style={{ "--badge": group.color } as React.CSSProperties} title={group.name} data-print={print || undefined}>
       {group.badge}
     </span>
   );

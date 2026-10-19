@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { watchUrl } from "@/lib/format";
 import * as sfx from "@/lib/sfx";
 import CrtHull, { type HullKey } from "./CrtHull";
+import { useMech } from "./useMech";
 import type { Video } from "@/lib/types";
 
 type YTPlayer = {
@@ -70,9 +71,7 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
   const [resizing, setResizing] = useState(false);
   const bezelRef = useRef<HTMLDivElement>(null);
   const [has3d, setHas3d] = useState(false);
-  const [pressed, setPressed] = useState<string | null>(null);
-  // Whether the key held down was latched when it went down; Enter clicks on keydown, so it can't be read on release.
-  const wasLatched = useRef(false);
+  const { pressed, bind } = useMech();
 
   const index = currentId ? queue.findIndex((v) => v.id === currentId) : -1;
   const current = index >= 0 ? queue[index] : null;
@@ -258,36 +257,22 @@ export default function Deck({ queue, currentId, playing, watched, width, onWidt
     ];
   }, [pressed, isPlaying, commentsOpen]);
 
-  // Pointer and keyboard both drive the key down and up; the click itself still does the action.
+  // Each key remembers whether it was latched when it went down, to know which sound its release makes.
   function mech(id: string) {
     const kind: sfx.KeyKind = id === "comments" ? "toggle" : id in latched ? "latch" : "momentary";
-    const down = () => {
-      wasLatched.current = !!latched[id];
-      setPressed(id);
-      sfx.keyDown(kind);
-    };
-    const up = () => {
-      setPressed((p) => (p === id ? null : p));
-      if (kind === "toggle") sfx.toggle(!wasLatched.current);
-      else if (kind === "momentary") sfx.keyUp();
-      else if (wasLatched.current) sfx.unlatch();
-      else sfx.latch();
-    };
-    return {
-      "data-key": id,
-      onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
-        if (e.button !== 0) return;
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId); // so the key comes back up wherever the pointer is released
-        } catch {}
-        down();
+    return bind(
+      id,
+      () => {
+        sfx.keyDown(kind);
+        return !!latched[id];
       },
-      onPointerUp: () => pressed === id && up(),
-      onPointerCancel: () => setPressed(null),
-      onKeyDown: (e: React.KeyboardEvent) => (e.key === " " || e.key === "Enter") && !e.repeat && down(),
-      onKeyUp: (e: React.KeyboardEvent) => (e.key === " " || e.key === "Enter") && pressed === id && up(),
-      onBlur: () => pressed === id && setPressed(null),
-    };
+      (wasLatched) => {
+        if (kind === "toggle") sfx.toggle(!wasLatched);
+        else if (kind === "momentary") sfx.keyUp();
+        else if (wasLatched) sfx.unlatch();
+        else sfx.latch();
+      },
+    );
   }
 
   return (
