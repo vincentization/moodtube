@@ -886,6 +886,8 @@ button.mini-label { cursor: pointer; }
   box-shadow: inset 0 1px 0 #fff, 0 5px 0 #a99e85, 0 8px 10px rgba(0, 0, 0, 0.22);
   transition: transform 0.08s;
 }
+a.chip-key { display: inline-flex; align-items: center; text-decoration: none; }
+a.chip-key:hover { color: #2a2824; }
 .chip-key.on { background: linear-gradient(#d3c9b1, #c9bea4); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25), 0 1px 0 #f2ecdf; transform: translateY(4px); }
 .rules { display: grid; grid-template-columns: 1fr 180px 220px; gap: 14px; align-items: end; }
 .chan-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 16px; max-height: 460px; overflow-y: auto; }
