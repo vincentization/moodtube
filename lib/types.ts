@@ -23,6 +23,15 @@ export type LaterItem = Video & { addedAt: number; shelf: string };
 
 export const ALL_SHELF = "all";
 
+// The linked YouTube account whose subscriptions the channel list mirrors.
+export type YoutubeLink = {
+  configured: boolean; // GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set
+  connected: boolean;
+  account: string | null;
+  lastSync: number | null;
+  error: string | null; // why the last sync failed, until one succeeds
+};
+
 export type AppState = {
   channels: Channel[];
   groups: Group[];
@@ -30,4 +39,5 @@ export type AppState = {
   watched: string[];
   later: LaterItem[];
   lastRefresh: number | null;
+  youtube: YoutubeLink;
 };

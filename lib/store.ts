@@ -1,17 +1,19 @@
 import { K, db } from "./redis";
-import { ALL_SHELF, type AppState, type Channel, type Group, type LaterItem, type Video } from "./types";
+import { accessToken, fetchSubscriptions, googleConfigured, revoke, RevokedError } from "./google";
+import { ALL_SHELF, type AppState, type Channel, type Group, type LaterItem, type Video, type YoutubeLink } from "./types";
 import { fetchDurations, fetchFeed, mapLimit } from "./youtube";
 
 const SHORT_MAX_SECONDS = 60;
 
 export async function getState(): Promise<AppState> {
-  const [channels, groups, videos, watched, later, lastRefresh] = await Promise.all([
+  const [channels, groups, videos, watched, later, lastRefresh, youtube] = await Promise.all([
     db().hgetall<Record<string, Channel>>(K.channels),
     db().get<Group[]>(K.groups),
     db().hgetall<Record<string, Video[]>>(K.videos),
     db().smembers(K.watched),
     getLater(),
     db().get<number>(K.lastRefresh),
+    db().get<YoutubeAccount>(K.youtube),
   ]);
   return {
     channels: Object.values(channels ?? {}).sort((a, b) => a.title.localeCompare(b.title)),
@@ -22,6 +24,13 @@ export async function getState(): Promise<AppState> {
     watched,
     later: Object.values(later).sort((a, b) => a.addedAt - b.addedAt),
     lastRefresh: lastRefresh ?? null,
+    youtube: {
+      configured: googleConfigured(),
+      connected: !!youtube?.refreshToken,
+      account: youtube?.account ?? null,
+      lastSync: youtube?.lastSync ?? null,
+      error: youtube?.error ?? null,
+    } satisfies YoutubeLink,
   };
 }
 
@@ -39,19 +48,63 @@ export async function importChannels(channels: Channel[]): Promise<number> {
   return fresh.length;
 }
 
-export async function removeChannel(id: string) {
+export async function removeChannels(ids: string[]) {
+  if (ids.length === 0) return;
+  const gone = new Set(ids);
   const groups = (await db().get<Group[]>(K.groups)) ?? [];
   await Promise.all([
-    db().hdel(K.channels, id),
-    db().hdel(K.videos, id),
+    db().hdel(K.channels, ...ids),
+    db().hdel(K.videos, ...ids),
     db().set(
       K.groups,
-      groups.map((g) => ({ ...g, channelIds: g.channelIds.filter((c) => c !== id) })),
+      groups.map((g) => ({ ...g, channelIds: g.channelIds.filter((c) => !gone.has(c)) })),
     ),
   ]);
 }
 
-export async function refreshAll(): Promise<{ channels: number; failed: string[]; newDurations: number }> {
+export const removeChannel = (id: string) => removeChannels([id]);
+
+// The linked Google account. The refresh token is dropped when Google rejects it, keeping the error to show.
+type YoutubeAccount = { refreshToken: string | null; account: string | null; lastSync: number | null; error: string | null };
+
+export async function linkYoutube(refreshToken: string, account: string | null) {
+  await db().set<YoutubeAccount>(K.youtube, { refreshToken, account, lastSync: null, error: null });
+}
+
+export async function unlinkYoutube() {
+  const link = await db().get<YoutubeAccount>(K.youtube);
+  if (link?.refreshToken) await revoke(link.refreshToken);
+  await db().del(K.youtube);
+}
+
+export type SubscriptionSync = { added: number; removed: number } | { error: string };
+
+// Make the channel list match the linked account's subscriptions: subscribe on YouTube and the channel shows up
+// here, unsubscribe and it goes (along with its videos and group memberships). Null when nothing is linked.
+export async function syncSubscriptions(): Promise<SubscriptionSync | null> {
+  const link = await db().get<YoutubeAccount>(K.youtube);
+  if (!link?.refreshToken || !googleConfigured()) return null;
+  try {
+    const subs = await fetchSubscriptions(await accessToken(link.refreshToken));
+    const existing = (await db().hgetall<Record<string, Channel>>(K.channels)) ?? {};
+    const ids = new Set(subs.map((c) => c.id));
+    // An empty answer is far more likely a hiccup than someone unsubscribing from everything, so keep the list.
+    const gone = subs.length ? Object.keys(existing).filter((id) => !ids.has(id)) : [];
+    const added = await importChannels(subs);
+    await removeChannels(gone);
+    await db().set<YoutubeAccount>(K.youtube, { ...link, lastSync: Date.now(), error: null });
+    return { added, removed: gone.length };
+  } catch (err) {
+    const revoked = err instanceof RevokedError;
+    const error = revoked ? "Google access expired or was revoked. Connect YouTube again." : `Couldn't sync subscriptions: ${(err as Error).message}`;
+    await db().set<YoutubeAccount>(K.youtube, { ...link, refreshToken: revoked ? null : link.refreshToken, error });
+    return { error };
+  }
+}
+
+export async function refreshAll(): Promise<{ channels: number; failed: string[]; newDurations: number; subscriptions: SubscriptionSync | null }> {
+  // Pick up subscription changes first, so new channels get their videos in this same refresh.
+  const subscriptions = await syncSubscriptions();
   const [channelMap, prevVideos] = await Promise.all([
     db().hgetall<Record<string, Channel>>(K.channels),
     db().hgetall<Record<string, Video[]>>(K.videos),
@@ -105,7 +158,7 @@ export async function refreshAll(): Promise<{ channels: number; failed: string[]
   await hsetChunked(K.videos, updates);
   if (renamed.length) await hsetChunked(K.channels, renamed, 200);
   await db().set(K.lastRefresh, Date.now());
-  return { channels: channels.length, failed, newDurations: fetched.size };
+  return { channels: channels.length, failed, newDurations: fetched.size, subscriptions };
 }
 
 export async function saveGroups(groups: Group[]) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
+import { timeAgo } from "@/lib/format";
 import { nextGroupColor } from "@/lib/groups";
 import type { AppState, Group, Rules } from "@/lib/types";
 import Header from "./Header";
@@ -11,6 +12,8 @@ export default function ChannelsApp() {
   const [state, setState] = useState<AppState | null>(null);
   const [status, setStatus] = useState("");
   const [importMsg, setImportMsg] = useState("");
+  const [youtubeMsg, setYoutubeMsg] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const [newName, setNewName] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -25,6 +28,17 @@ export default function ChannelsApp() {
 
   useEffect(() => {
     loadState().catch((err) => setStatus(`Could not load: ${err.message}`));
+    // Back from the Google sign-in: say how it went, then drop the parameter so a reload doesn't repeat it.
+    const result = new URLSearchParams(window.location.search).get("youtube");
+    if (!result) return;
+    setYoutubeMsg(
+      {
+        connected: "Connected. Your subscriptions are synced and their videos fetched.",
+        denied: "Google sign-in was cancelled.",
+        unconfigured: "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first (see the README).",
+      }[result] ?? "Couldn't connect to YouTube. Try again.",
+    );
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const sync = (p: Promise<unknown>) =>
@@ -46,7 +60,7 @@ export default function ChannelsApp() {
     );
   }
 
-  const { channels, groups } = state;
+  const { channels, groups, youtube } = state;
   const selected = groups.find((g) => g.id === selectedId) ?? null;
 
   function saveGroups(next: Group[]) {
@@ -71,6 +85,28 @@ export default function ChannelsApp() {
     } catch (err) {
       setImportMsg((err as Error).message);
     }
+  }
+
+  async function syncNow() {
+    setSyncing(true);
+    setYoutubeMsg("Syncing…");
+    try {
+      const r = await api<{ added: number; removed: number }>("/api/youtube");
+      setYoutubeMsg(
+        r.added || r.removed ? `Synced: ${r.added} new, ${r.removed} unsubscribed.` : "Synced. No subscription changes.",
+      );
+    } catch (err) {
+      setYoutubeMsg((err as Error).message);
+    }
+    await loadState().catch(() => {});
+    setSyncing(false);
+  }
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect YouTube? Your channels and groups stay, but stop following your subscriptions.")) return;
+    await sync(api("/api/youtube", "DELETE"));
+    setYoutubeMsg("Disconnected.");
+    await loadState().catch(() => {});
   }
 
   function createGroup() {
@@ -108,25 +144,59 @@ export default function ChannelsApp() {
           {status && <div className="empty">{status}</div>}
 
           <section className="tray">
-            <div className="panel-label">IMPORT SUBSCRIPTIONS</div>
+            <div className="panel-label">YOUTUBE SUBSCRIPTIONS</div>
             <div className="sheet row">
-              <label className="chip-key" style={{ display: "inline-flex", alignItems: "center" }}>
-                CHOOSE SUBSCRIPTIONS.CSV
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  hidden
-                  onChange={(e) => {
-                    handleFile(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <p className="note">
-                {importMsg ||
-                  "Google Takeout → YouTube and YouTube Music → subscriptions/subscriptions.csv. Importing again only adds new channels."}
-              </p>
+              {youtube.connected ? (
+                <>
+                  <button className="chip-key" onClick={syncNow} disabled={syncing}>
+                    {syncing ? "SYNCING…" : "SYNC NOW"}
+                  </button>
+                  <button className="chip-key" onClick={disconnect} disabled={syncing}>
+                    DISCONNECT
+                  </button>
+                  <p className="note">
+                    {youtubeMsg ||
+                      youtube.error ||
+                      `Following ${youtube.account ?? "your account"}'s subscriptions · ${channels.length} channels${
+                        youtube.lastSync ? ` · synced ${timeAgo(new Date(youtube.lastSync).toISOString())}` : ""
+                      }. Every refresh picks up channels you subscribe to or leave on YouTube.`}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <a className="chip-key" href="/api/youtube/connect" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+                    CONNECT YOUTUBE
+                  </a>
+                  <p className="note">
+                    {youtubeMsg ||
+                      youtube.error ||
+                      (youtube.configured
+                        ? "Sign in with Google once and the channel list follows your YouTube subscriptions from then on: new ones are added, ones you leave are removed."
+                        : "Needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (see the README).")}
+                  </p>
+                </>
+              )}
             </div>
+            {!youtube.connected && (
+              <div className="sheet row">
+                <label className="chip-key" style={{ display: "inline-flex", alignItems: "center" }}>
+                  CHOOSE SUBSCRIPTIONS.CSV
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    hidden
+                    onChange={(e) => {
+                      handleFile(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <p className="note">
+                  {importMsg ||
+                    "Or import by hand: Google Takeout → YouTube and YouTube Music → subscriptions/subscriptions.csv. Importing again only adds new channels."}
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="tray">

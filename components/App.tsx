@@ -56,9 +56,10 @@ export default function App() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const r = await api<{ channels: number; failed: string[] }>("/api/refresh");
+      const r = await api<{ channels: number; failed: string[]; subscriptions: { error?: string } | null }>("/api/refresh");
       await loadState();
-      setStatus(r.failed.length ? `Updated ${r.channels - r.failed.length} of ${r.channels} channels.` : "");
+      const sub = r.subscriptions?.error ?? "";
+      setStatus([sub, r.failed.length ? `Updated ${r.channels - r.failed.length} of ${r.channels} channels.` : ""].filter(Boolean).join(" "));
     } catch (err) {
       setStatus(`Refresh failed: ${(err as Error).message}`);
     } finally {
@@ -421,7 +422,7 @@ export default function App() {
                 {!state ? (
                   !status && <div className="empty">Loading…</div>
                 ) : state.channels.length === 0 ? (
-                  <div className="empty">No channels yet — import your subscriptions on the Channels page.</div>
+                  <div className="empty">No channels yet — connect YouTube on the Channels page.</div>
                 ) : feed.length === 0 ? (
                   <div className="empty">
                     {state.videos.length === 0 ? "No videos yet — press Refresh." : "Nothing here matches this channel's filters."}

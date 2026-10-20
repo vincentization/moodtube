@@ -915,4 +915,9 @@ button.mini-label { cursor: pointer; }
 .login-form { display: flex; flex-direction: column; gap: 12px; margin: 28px 28px 0; }
 .login-form .input { height: 40px; }
 .login-form .tbtn { width: 100%; }
+/* Privacy policy: the login console, wider, with readable body text. */
+.privacy-console { width: min(640px, 100%); }
+.privacy { display: flex; flex-direction: column; gap: 10px; margin: 28px 28px 0; }
+.privacy h1, .privacy h2 { margin: 8px 0 0; }
+.privacy p { margin: 0; font-size: 14px; line-height: 1.5; color: #3a3631; text-wrap: pretty; }
 .err { margin: 0; font-size: 13px; color: oklch(0.62 0.16 30); font-weight: 700; }

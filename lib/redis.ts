@@ -19,4 +19,5 @@ export const K = {
   watched: "mt:watched", // set of videoIds
   later: "mt:later", // hash "shelf|videoId" -> LaterItem
   lastRefresh: "mt:lastRefresh", // epoch ms
+  youtube: "mt:youtube", // JSON YoutubeAccount (see store.ts): the linked Google account's refresh token
 };
