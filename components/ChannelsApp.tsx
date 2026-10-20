@@ -164,7 +164,7 @@ export default function ChannelsApp() {
                 </>
               ) : (
                 <>
-                  <a className="chip-key" href="/api/youtube/connect" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+                  <a className="chip-key" href="/api/youtube/connect">
                     CONNECT YOUTUBE
                   </a>
                   <p className="note">
@@ -191,9 +191,18 @@ export default function ChannelsApp() {
                     }}
                   />
                 </label>
+                {/* Takeout's custom export with only YouTube preselected; the newest CSV comes from a fresh export. */}
+                <a
+                  className="chip-key"
+                  href="https://takeout.google.com/takeout/custom/youtube"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  GET LATEST CSV ↗
+                </a>
                 <p className="note">
                   {importMsg ||
-                    "Or import by hand: Google Takeout → YouTube and YouTube Music → subscriptions/subscriptions.csv. Importing again only adds new channels."}
+                    "Or import by hand: Get latest CSV opens Google Takeout with YouTube preselected. Under “All YouTube data included”, keep only subscriptions, export, then choose subscriptions/subscriptions.csv here. Importing again only adds new channels."}
                 </p>
               </div>
             )}
